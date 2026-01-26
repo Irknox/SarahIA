@@ -1,0 +1,18 @@
+[
+    {
+        "id": 1,
+        "user": "Test User 1",
+        "phone": "62587119",
+        "agent_ext": "9998",
+        "scheduled": "2026-01-26 18:00:00",
+        "status": "scheduled"
+    },
+    {
+        "id": 2,
+        "user": "Ejemplo Sistema",
+        "phone": "98765432",
+        "agent_ext": "9998",
+        "scheduled": "2026-01-26 20:30:00",
+        "status": "scheduled"
+    }
+]
