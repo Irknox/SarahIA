@@ -7,7 +7,7 @@
     "start": "node AMI.js"
   },
   "dependencies": {
-    "asterisk-ami-client": "^1.2.8",
+    "asterisk-ami-client": "1.1.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2"
   }
