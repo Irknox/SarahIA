@@ -13,38 +13,38 @@ services:
       env_file: .env
 
   backend-api:
-    build: ./backend
+    build: ./confirmation_agent_be
     container_name: SarahAI-api
     restart: always
     network_mode: "host"
     command: uvicorn main:app --host 0.0.0.0 --port 7676
     env_file: .env
     volumes:
-      - ./backend/db.json:/app/db.json 
+      - ./confirmation_agent_be/db.json:/app/db.json 
     depends_on:
       - redis
 
   celery-worker:
-    build: ./backend
+    build: ./confirmation_agent_be
     container_name: SarahAI-worker
     restart: always
     network_mode: "host"
     command: celery -A tasks worker --loglevel=info
     env_file: .env
     volumes:
-      - ./backend/db.json:/app/db.json
+      - ./confirmation_agent_be/db.json:/app/db.json
     depends_on:
       - redis
 
   celery-beat:
-    build: ./backend
+    build: ./confirmation_agent_be
     container_name: SarahAI-beat
     restart: always
     network_mode: "host"
     command: celery -A tasks beat --loglevel=info
     env_file: .env
     volumes:
-      - ./backend/db.json:/app/db.json
+      - ./confirmation_agent_be/db.json:/app/db.json
     depends_on:
       - redis
 
