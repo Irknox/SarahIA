@@ -19,7 +19,7 @@ celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
-    timezone='UTC', 
+    timezone='Europe/Madrid',  
     enable_utc=True,
 )
 
@@ -62,7 +62,7 @@ def disparar_llamada_ami(self, user_phone, agent_ext):
 @celery_app.task(name="revisar_agenda_y_disparar")
 def revisar_agenda_y_disparar():
     db_actual = leer_db()
-    ahora = datetime.utcnow()
+    ahora = datetime.now()
     hubo_cambios = False
 
     print(f"[Beat] Revisando agenda a las {ahora}...")
