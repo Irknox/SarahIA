@@ -10,7 +10,7 @@
     {
         "id": 2,
         "user": "Ejemplo Sistema",
-        "phone": "98765432",
+        "phone": "0",
         "agent_ext": "9998",
         "scheduled": "2026-01-26 20:30:00",
         "status": "scheduled"
