@@ -44,7 +44,7 @@ def disparar_llamada_ami(self, user_phone, agent_ext):
         "Content-Type": "application/json"
     }
     try:
-        print(f"[Celery] Intentando llamada: {agent_ext} -> {user_phone}")
+        print(f"[Celery] Intentando llamada: {agent_ext} -> {user_phone}!")
         response = requests.post(
             AMI_CONTROL_URL, 
             json=payload, 
