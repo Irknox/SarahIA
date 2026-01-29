@@ -6,7 +6,7 @@ const IS_PROD = true;
 const BASE_URL = IS_PROD 
   ? "http://64.23.170.136/SchedulerAgent/API" 
   : "http://localhost:7676";
-  
+
 const getUrl = (path) => {
   if (IS_PROD) return `${BASE_URL}${path}`;
   return `${BASE_URL}${path}/dev`;
