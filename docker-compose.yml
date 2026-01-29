@@ -83,14 +83,14 @@ services:
     container_name: sarahai-frontend
     restart: always
     environment:
-      - FE_URL=http://64.23.170.136/SchedulerAgent/API
+      - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
 
   gateway:
     image: nginx:alpine
     container_name: sarahai-gateway
     restart: always
     ports:
-      - "80:80"
+      - "7373:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
