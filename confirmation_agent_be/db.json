@@ -1,18 +1,47 @@
 [
     {
         "id": 1,
-        "user": "Test User 1",
-        "phone": "62587119",
-        "agent_ext": "9998",
-        "scheduled": "2026-01-27 01:15:00",
-        "status": "scheduled"
+        "username": "Alejandro Carmona",
+        "email": "acarmona@moovin.me",
+        "phone": "62587111",
+        "type": "Confirmacion",
+        "status": "Agendado",
+        "date": "2026-01-27 01:15:00"
     },
     {
         "id": 2,
-        "user": "Ejemplo Sistema",
+        "username": "Javier Nu\u00c3\u00b1ez",
+        "email": "jnu\u00c3\u00b1ez@moovin.me",
+        "phone": "87351686",
+        "type": "Reagenda",
+        "status": "Agendado",
+        "date": "2026-01-26 20:30:00"
+    },
+    {
+        "id": 3,
+        "username": "Test",
+        "email": "test@mail.com",
         "phone": "0",
-        "agent_ext": "9998",
-        "scheduled": "2026-01-26 20:30:00",
-        "status": "scheduled"
+        "type": "Confirmacion",
+        "status": "Fallida",
+        "date": "2026-01-26 20:30:00"
+    },
+    {
+        "id": 4,
+        "username": "Test 2",
+        "email": "test@mail.com",
+        "phone": "0",
+        "type": "Reagenda",
+        "status": "Confirmada",
+        "date": "2026-01-26 20:30:00"
+    },
+    {
+        "id": 5,
+        "username": "Test 3",
+        "email": "test@mail.com",
+        "phone": "0",
+        "type": "Confirmacion",
+        "status": "Denegada",
+        "date": "2026-01-26 20:30:00"
     }
 ]
