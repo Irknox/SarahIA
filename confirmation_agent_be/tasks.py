@@ -30,7 +30,7 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-AMI_CONTROL_URL = os.getenv("AMI_CONTROL_URL",)
+AMI_CONTROL_URL = os.getenv("AMI_URL",)
 AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
