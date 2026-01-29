@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  basePath: '/SchedulerAgent/CallStatusLogger',
+  basePath: '/SchedulerAgent/CallsStatusLogger',
   trailingSlash: true, 
   // assetPrefix: '/SchedulerAgent/CallStatusLogger'
 };
