@@ -121,6 +121,28 @@ async def update_call_record(call_id: int, data: RegistroLlamada):
         actualizar_llamada(call_id, data.model_dump())
         return {"status": "warning", "detail": str(e)}
 
+@app.delete("/calls/delete/{call_id}", dependencies=[Depends(verify_token)])
+async def delete_call_record_prod(call_id: int):
+    """
+    Elimina un registro de producción, revoca la tarea en Celery y limpia la DB.
+    """
+    db = leer_db()
+    llamada = next((item for item in db if item["id"] == call_id), None)
+    
+    if not llamada:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    if "task_id" in llamada and llamada["task_id"]:
+        try:
+            celery_app.control.revoke(llamada["task_id"], terminate=True)
+        except Exception as e:
+            print(f"Error al revocar tarea {llamada['task_id']}: {e}")
+    exito = eliminar_llamada(call_id)
+    
+    if not exito:
+        raise HTTPException(status_code=500, detail="Error al eliminar el registro de la base de datos")
+        
+    return {"status": "success", "message": f"Registro {call_id} y su tarea asociada han sido eliminados"}
+
 #------------------------------Development Endpoints------------------------------#
 @app.post("/calls/add/dev", dependencies=[Depends(verify_token)])
 async def add_call_record(data: RegistroLlamada):
