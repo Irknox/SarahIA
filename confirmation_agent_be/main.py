@@ -109,7 +109,7 @@ async def update_call_record(call_id: int, data: RegistroLlamada):
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
         task = disparar_llamada_ami.apply_async(
-            args=[data.phone, "101"],
+            args=[data.phone, AMI_EXTENSION],
             eta=local_dt
         )
 
