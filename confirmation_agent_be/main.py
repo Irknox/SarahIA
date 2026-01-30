@@ -12,7 +12,7 @@ import pytz
 madrid_tz = pytz.timezone("Europe/Madrid")
 
 load_dotenv()
-TOKEN = os.getenv("AUTH_TOKEN")
+TOKEN = os.getenv("NEXT_PUBLIC_AUTH_TOKEN")
 
 async def verify_token(auth_token: str = Header(None, alias="Auth-Token")):
     if auth_token != TOKEN:

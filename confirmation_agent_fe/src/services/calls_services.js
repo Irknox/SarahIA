@@ -14,7 +14,7 @@ const getUrl = (path) => {
 export const fetchEveryCallData = async () => {
   try {
     const response = await axios.get(`${BASE_URL}/calls`, {
-      headers: { "Auth-Token": process.env.AUTH_TOKEN },
+      headers: { "Auth-Token": process.env.NEXT_PUBLIC_AUTH_TOKEN },
     });
     return response.data;
   } catch (error) {
@@ -29,7 +29,7 @@ export const addCallRecord = async (callData) => {
     const response = await axios.post(url, callData, {
       headers: {
         "Content-Type": "application/json",
-        "Auth-Token": process.env.AUTH_TOKEN,
+        "Auth-Token": process.env.NEXT_PUBLIC_AUTH_TOKEN,
       },
     });
     return response.data;
@@ -45,7 +45,7 @@ export const updateCallRecord = async (callId, callData) => {
     const response = await axios.put(url, callData, {
       headers: {
         "Content-Type": "application/json",
-        "Auth-Token": process.env.AUTH_TOKEN,
+        "Auth-Token": process.env.NEXT_PUBLIC_AUTH_TOKEN,
       },
     });
     return response.data;
@@ -59,7 +59,7 @@ export const deleteCallRecord = async (callId) => {
   try {
     const url = getUrl(`/calls/delete/${callId}`);
     const response = await axios.delete(url, {
-      headers: { "Auth-Token": process.env.AUTH_TOKEN },
+      headers: { "Auth-Token": process.env.NEXT_PUBLIC_AUTH_TOKEN },
     });
     return response.data;
   } catch (error) {
