@@ -1,10 +1,9 @@
 import axios from "axios";
 
+const IS_PROD = true;
 
-const IS_PROD = true; 
-
-const BASE_URL = IS_PROD 
-  ? "http://64.23.170.136/SchedulerAgent/API" 
+const BASE_URL = IS_PROD
+  ? "http://64.23.170.136:7373/SchedulerAgent/API"
   : "http://localhost:7676";
 
 const getUrl = (path) => {
@@ -15,7 +14,7 @@ const getUrl = (path) => {
 export const fetchEveryCallData = async () => {
   try {
     const response = await axios.get(`${BASE_URL}/calls`, {
-      headers: { auth_token: process.env.AUTH_TOKEN }
+      headers: { auth_token: process.env.AUTH_TOKEN },
     });
     return response.data;
   } catch (error) {
