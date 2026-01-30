@@ -22,6 +22,7 @@ async def verify_token(auth_token: str = Header(None)):
 origins = [
     "http://localhost:7777",
     "http://127.0.0.1:7777",
+    "http://64.23.170.136:7373"
 ]
 
 app = FastAPI(title="SarahAI Calling System")
