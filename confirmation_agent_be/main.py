@@ -14,9 +14,12 @@ madrid_tz = pytz.timezone("Europe/Madrid")
 load_dotenv()
 TOKEN = os.getenv("AUTH_TOKEN")
 
-async def verify_token(auth_token: str = Header(None)):
+async def verify_token(auth_token: str = Header(None, alias="Auth-Token")):
     if auth_token != TOKEN:
-        raise HTTPException(status_code=401, detail="Token de autorización inválido o ausente")
+        raise HTTPException(
+            status_code=401, 
+            detail="Token de autorización inválido o ausente"
+        )
     return auth_token
 
 origins = [
@@ -50,8 +53,6 @@ def read_root():
 
 @app.get("/calls", dependencies=[Depends(verify_token)])
 def get_calls(auth_token: str = Header(None)):
-    if auth_token != TOKEN:
-        raise HTTPException(status_code=401, detail="Token de autorización inválido o ausente")
     return leer_db()
 
 class LlamadaSchema(BaseModel):
