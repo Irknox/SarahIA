@@ -79,11 +79,15 @@ services:
       - redis
 
   sarahai-frontend:
-    build: ./confirmation_agent_fe
+    build:
+      context: ./confirmation_agent_fe
+      args:
+        - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
     container_name: sarahai-frontend
     restart: always
     network_mode: "host"
     environment:
+      - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
       - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
 
   gateway:

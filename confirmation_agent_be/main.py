@@ -52,7 +52,7 @@ def read_root():
 
 
 @app.get("/calls", dependencies=[Depends(verify_token)])
-def get_calls(auth_token: str = Header(None)):
+def get_calls():
     return leer_db()
 
 class LlamadaSchema(BaseModel):
