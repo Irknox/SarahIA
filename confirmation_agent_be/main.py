@@ -13,6 +13,7 @@ madrid_tz = pytz.timezone("Europe/Madrid")
 
 load_dotenv()
 TOKEN = os.getenv("NEXT_PUBLIC_AUTH_TOKEN")
+AMI_EXTENSION = os.getenv("AMI_EXTENSION")
 
 async def verify_token(auth_token: str = Header(None, alias="Auth-Token")):
     if auth_token != TOKEN:
@@ -72,7 +73,7 @@ async def schedule_call(data: RegistroLlamada):
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
         task = disparar_llamada_ami.apply_async(
-            args=[data.phone, "101"],
+            args=[data.phone, AMI_EXTENSION],
             eta=local_dt
         )
         nueva_entrada = {
