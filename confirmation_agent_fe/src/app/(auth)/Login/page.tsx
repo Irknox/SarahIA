@@ -18,7 +18,8 @@ export default function SchedulerLogin() {
       });
 
       if (response.ok) {
-        router.push("/SchedulerAgent/CallsStatusLogger");
+        console.log("Response OK");
+        router.push("/CallsStatusLogger");
       } else {
         alert("Clave de acceso incorrecta");
       }
