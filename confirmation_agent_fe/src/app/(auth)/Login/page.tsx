@@ -36,7 +36,7 @@ export default function SchedulerLogin() {
       }}
     >
       <img
-        src="/LoginWallpaper.svg"
+        src="/SchedulerAgent/LoginWallpaper.svg"
         alt="Background"
         className="fixed inset-0 -z-50 h-screen w-screen object-cover"
       />

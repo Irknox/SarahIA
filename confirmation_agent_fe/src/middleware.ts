@@ -13,14 +13,14 @@ export async function middleware(request: NextRequest) {
 
   if (!isLoginPage) {
     if (!token) {
-      return NextResponse.redirect(new URL("/SchedulerAgent/Login/", request.url));
+      return NextResponse.redirect(new URL("/SchedulerAgent/Login", request.url));
     }
 
     try {
       await jwtVerify(token, JWT_SECRET);
       return NextResponse.next();
     } catch (error) {
-      const response = NextResponse.redirect(new URL("/SchedulerAgent/Login/", request.url));
+      const response = NextResponse.redirect(new URL("/SchedulerAgent/Login", request.url));
       response.cookies.delete("session_token");
       return response;
     }
@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   if (isLoginPage && token) {
     try {
       await jwtVerify(token, JWT_SECRET);
-      return NextResponse.redirect(new URL("/SchedulerAgent/CallsStatusLogger/", request.url));
+      return NextResponse.redirect(new URL("/SchedulerAgent/CallsStatusLogger", request.url));
     } catch (error) {
       return NextResponse.next();
     }
