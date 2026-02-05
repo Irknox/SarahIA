@@ -19,7 +19,7 @@ export default function SchedulerLogin() {
 
       if (response.ok) {
         console.log("Response OK");
-        window.location.href = "/SchedulerAgent/CallsStatusLogger";
+        router.push("/CallsStatusLogger");
       } else {
         alert("Clave de acceso incorrecta");
       }
