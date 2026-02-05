@@ -9,10 +9,14 @@ const JWT_SECRET = new TextEncoder().encode(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("session_token")?.value;
-  const isLoginPage = pathname.includes("/Login") || pathname === "/";
+  const isLoginPage =
+    pathname.includes("/Login") ||
+    pathname === "/" ||
+    pathname.endsWith("/SchedulerAgent");
 
   if (!isLoginPage) {
     if (!token) {
+      console.log("No hay token, redirigiendo a Login");
       return NextResponse.redirect(
         new URL("/SchedulerAgent/Login", request.url),
       );
