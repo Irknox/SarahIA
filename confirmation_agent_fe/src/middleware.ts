@@ -8,6 +8,9 @@ const JWT_SECRET = new TextEncoder().encode(
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const allCookies = request.cookies.getAll();
+  console.log("Cookies detectadas:", allCookies.map(c => c.name)); 
+  
   const token = request.cookies.get("session_token")?.value;
   const isLoginPage =
     pathname.includes("/Login") ||

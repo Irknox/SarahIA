@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       const response = NextResponse.json({ authenticated: true });
       response.cookies.set("session_token", jwt, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: false,
         path: "/",
         maxAge: 60 * 60 * 24,
         sameSite: "lax",
