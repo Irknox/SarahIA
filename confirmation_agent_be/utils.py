@@ -51,3 +51,15 @@ def eliminar_llamada(id_llamada):
         guardar_db(nueva_db)
         return True
     return False
+
+def get_call_context(phone: str, id_call: int): 
+    db = leer_db()
+    for llamada in db:
+        if str(llamada["id"]) == str(id_call) and llamada["phone"] == phone:
+            return {
+                "username": llamada.get("username"),
+                "email": llamada.get("email"),
+                "type": llamada.get("type"),
+                "indications": llamada.get("indications") 
+            }
+    return {}

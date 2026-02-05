@@ -30,10 +30,12 @@ app.post("/originate", async (req, res) => {
       console.warn("[AMI] Intento de acceso no autorizado");
       return res.status(403).json({ error: "Unauthorized" });
     }
-    const { user_phone, agent_ext } = req.body || {};
+    const { user_phone, agent_ext, call_id } = req.body || {};
     
-    if (!user_phone || !agent_ext) {
-      return res.status(400).json({ error: "Faltan parámetros: user_phone o agent_ext" });
+    if (!user_phone || !agent_ext || !call_id) {
+      return res.status(400).json({ 
+        error: "Faltan parámetros: user_phone, agent_ext o call_id" 
+      });
     }
     const channelTarget = `Local/${agent_ext}@from-internal-custom`;
 
@@ -45,7 +47,7 @@ app.post("/originate", async (req, res) => {
       Exten: "s",
       Priority: 1,
       Async: "true",
-      Variable: `DESTINO_HUMANO=${user_phone}`,
+      Variable: `DESTINO_HUMANO=${user_phone},__X_CALL_ID=${call_id},__X_CALLER_ID=${user_phone}`,
     });
 
     console.log("[AMI] Respuesta de Asterisk:", response.Response);

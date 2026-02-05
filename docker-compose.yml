@@ -90,6 +90,22 @@ services:
       - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
       - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
 
+  agent-api:
+    build: ./confirmation_agent_be
+    container_name: SarahAI-agent-api
+    restart: always
+    network_mode: "host"
+    command: uvicorn agent_api.api:app --host 0.0.0.0 --port 7575
+    env_file: .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./confirmation_agent_be/db.json:/app/db.json
+    depends_on:
+      - redis
+
   gateway:
     image: nginx:alpine
     container_name: sarahai-gateway

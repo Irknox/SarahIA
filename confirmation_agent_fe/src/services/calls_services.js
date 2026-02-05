@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const IS_PROD = true;
+const IS_PROD = false;
 
 const BASE_URL = IS_PROD
   ? "http://64.23.170.136:7373/SchedulerAgent/API"

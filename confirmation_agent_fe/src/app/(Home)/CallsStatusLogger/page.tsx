@@ -1,5 +1,5 @@
-import Calls_table from "../../components/Calls_table";
-import General_Nav from "../../components/General_Nav";
+import Calls_table from "../../../components/Calls_table";
+import General_Nav from "../../../components/General_Nav";
 
 export default function CallStatusLog() {
   return (

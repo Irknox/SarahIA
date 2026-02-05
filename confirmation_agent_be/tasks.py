@@ -32,12 +32,14 @@ celery_app.conf.beat_schedule = {
 
 AMI_CONTROL_URL = os.getenv("AMI_URL",)
 AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
+AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
-def disparar_llamada_ami(self, user_phone, agent_ext):
+def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
     payload = {
         "user_phone": user_phone,
-        "agent_ext": agent_ext
+        "agent_ext": agent_ext,
+        "call_id": str(call_id)
     }
     headers = {
         "x-ari-control-token": AMI_TOKEN,
@@ -65,16 +67,13 @@ def revisar_agenda_y_disparar():
     ahora = datetime.now()
     hubo_cambios = False
 
-    print(f"[Beat] Revisando agenda a las {ahora}...")
-
     for llamada in db_actual:
-        if llamada["status"] == "scheduled" and llamada["scheduled"] != "NOW":
-            fecha_llamada = datetime.strptime(llamada["scheduled"], "%Y-%m-%d %H:%M:%S")
-            
-            if fecha_llamada <= ahora:
-                print(f"[Beat] Disparando llamada pendiente para {llamada['phone']}...")
-                llamada["status"] = "completed"
-                disparar_llamada_ami.delay(llamada["phone"], llamada["agent_ext"])
+        if llamada["status"] == "Agendado": 
+            fecha_llamada = datetime.strptime(llamada["date"], "%Y-%m-%d %H:%M:%S")
+            if fecha_llamada <= ahora or "task_id" not in llamada:
+                print(f"[Beat] Rescatando llamada de {llamada['username']}...")
+                task = disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
+                llamada["task_id"] = task.id
                 hubo_cambios = True
 
     if hubo_cambios:

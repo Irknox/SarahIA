@@ -70,28 +70,26 @@ async def schedule_call(data: RegistroLlamada):
     Agenda una nueva llamada en Celery y guarda el registro en db.json
     """
     try:
+        nueva_entrada = data.model_dump()
+        nueva_entrada["status"] = "Agendado"
+        registro_creado = agregar_llamada(nueva_entrada)
+        
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
+        
         task = disparar_llamada_ami.apply_async(
-            args=[data.phone, AMI_EXTENSION],
+            args=[data.phone, AMI_EXTENSION, registro_creado["id"]], 
             eta=local_dt
         )
-        nueva_entrada = {
-            "username": data.username,
-            "email": data.email,
-            "phone": data.phone,
-            "type": data.type,
-            "status": "Agendado",
-            "date": data.date,
-            "task_id": task.id
-        }
-        registro_creado = agregar_llamada(nueva_entrada)
+
+        actualizar_llamada(registro_creado["id"], {"task_id": task.id})
+
         return {
             "status": "success", 
             "message": f"Llamada agendada para {data.username} a las {data.date} (Madrid)", 
             "task_id": task.id,
-            "data": registro_creado
-        }   
+            "data": registro_creado 
+        }
     except Exception as e:
         print(f"Error en schedule_call: {e}")
         raise HTTPException(status_code=500, detail=f"Error al agendar: {str(e)}")
@@ -104,7 +102,6 @@ async def update_call_record(call_id: int, data: RegistroLlamada):
         raise HTTPException(status_code=404, detail="Registro no encontrado")
     if "task_id" in llamada_previa and llamada_previa["task_id"]:
         celery_app.control.revoke(llamada_previa["task_id"], terminate=True)
-
     try:
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
@@ -112,7 +109,6 @@ async def update_call_record(call_id: int, data: RegistroLlamada):
             args=[data.phone, AMI_EXTENSION],
             eta=local_dt
         )
-
         update_data = data.model_dump()
         update_data["task_id"] = task.id
         actualizar_llamada(call_id, update_data)
