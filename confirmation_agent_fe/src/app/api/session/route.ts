@@ -8,10 +8,10 @@ const JWT_SECRET = new TextEncoder().encode(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { accessKey } = body;
-    console.log("Intento de autenticación con clave:", accessKey, "encontrada en env:", process.env.ACCESS_KEY);
+    const { access_key } = body;
+    console.log("Intento de autenticación con clave:", access_key, "encontrada en env:", process.env.ACCESS_KEY);
     
-    if (accessKey === process.env.ACCESS_KEY) {
+    if (access_key === process.env.ACCESS_KEY) {
       const jwt = await new SignJWT({ role: "admin" }) 
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
