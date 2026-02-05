@@ -11,7 +11,7 @@ export default function SchedulerLogin() {
     e.preventDefault(); 
 
     try {
-      const response = await fetch("/api/session", {
+      const response = await fetch("/SchedulerAgent/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_key: accessKey }),
