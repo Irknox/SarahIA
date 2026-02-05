@@ -9,28 +9,27 @@ const JWT_SECRET = new TextEncoder().encode(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("session_token")?.value;
-  const isLoginPage = pathname === "/Login" || pathname === "/";
+  const isLoginPage = pathname === "/Login/" || pathname === "/Login" || pathname === "/";
 
   if (!isLoginPage) {
     if (!token) {
-      return NextResponse.redirect(new URL("/SchedulerAgent/Login/", request.url));
+      return NextResponse.redirect(new URL("/Login/", request.url));
     }
 
     try {
       await jwtVerify(token, JWT_SECRET);
       return NextResponse.next();
     } catch (error) {
-      const response = NextResponse.redirect(new URL("/SchedulerAgent/Login/", request.url));
+      const response = NextResponse.redirect(new URL("/Login/", request.url));
       response.cookies.delete("session_token");
       return response;
     }
   }
 
-  // Si ya tiene token y está en login, mandarlo al dashboard
   if (isLoginPage && token) {
     try {
       await jwtVerify(token, JWT_SECRET);
-      return NextResponse.redirect(new URL("/SchedulerAgent/CallsStatusLogger/", request.url));
+      return NextResponse.redirect(new URL("/CallsStatusLogger/", request.url));
     } catch (error) {
       return NextResponse.next();
     }
