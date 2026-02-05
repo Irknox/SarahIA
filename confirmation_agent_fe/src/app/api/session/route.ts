@@ -9,9 +9,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { password } = body;
-    console.log("Intento de autenticación con clave:", password, "encontrada en env:", process.env.JWT_SECRET);
+    console.log("Intento de autenticación con clave:", password, "encontrada en env:", process.env.ACCESS_KEY);
     
-    if (password === process.env.JWT_SECRET) {
+    if (password === process.env.ACCESS_KEY) {
       const jwt = await new SignJWT({ role: "admin" }) 
         .setProtectedHeader({ alg: "HS256" })
         .setIssuedAt()
