@@ -2,7 +2,7 @@ import os
 import requests
 from celery import Celery
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils import leer_db, guardar_db
 import redis
 

@@ -46,9 +46,9 @@ app.post("/originate", async (req, res) => {
 
     const actionData = {
       Action: "Originate",
-      Channel: channelTarget,
-      Context: AMI_TRANSFER_CONTEXT,
-      Exten: "s",
+      Channel: `PJSIP/${user_phone}@ext-remote`,
+      Context: "from-internal-custom",
+      Exten: "7777",
       Priority: 1,
       Async: "true",
       Variable: `DESTINO_HUMANO=${user_phone},__X_CALL_ID=${call_id},__X_CALLER_ID=${user_phone}`,
@@ -65,13 +65,11 @@ app.post("/originate", async (req, res) => {
     });
   } catch (error) {
     console.error("[AMI] Error crítico en originate:", error);
-    return res
-      .status(500)
-      .json({
-        status: "error",
-        message: "Asterisk rechazó el comando o está desconectado",
-        detail: error.message,
-      });
+    return res.status(500).json({
+      status: "error",
+      message: "Asterisk rechazó el comando o está desconectado",
+      detail: error.message,
+    });
   }
 });
 
