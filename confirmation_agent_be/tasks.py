@@ -47,28 +47,6 @@ AMI_CONTROL_URL = os.getenv("AMI_URL",)
 AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
-@celery_app.task(name="sincronizar_estados_ve_db")
-def sincronizar_estados_ve_db():
-    db_actual = leer_db()
-    hubo_cambios = False
-    for llamada in db_actual:
-        if llamada["status"] in ["Agendado", "En curso", "Fallida"]:
-            estado_redis = redis_client.get(f"status:{llamada['phone']}")           
-            if estado_redis:
-                if estado_redis in ["CALLING_AI", "RINGING_HUMAN", "IN_PROGRESS"]:
-                    if llamada["status"] != "En curso":
-                        llamada["status"] = "En curso"
-                        hubo_cambios = True
-                elif "FAILED" in estado_redis:
-                    if llamada["status"] != "Fallida":
-                        llamada["status"] = "Fallida"
-                        hubo_cambios = True
-    if hubo_cambios:
-        print(f"[Beat] cambios guardados en DB después de sincronizar con Redis (último estado Redis: {estado_redis})")
-        guardar_db(db_actual)
-    else :
-        print(f"[Beat] No hubo cambios al sincronizar con Redis (último estado Redis: {estado_redis})")
-
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
 def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
     payload = {
@@ -96,6 +74,33 @@ def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
         print(f"[Celery] Error conectando con AMI Bridge: {exc}")
         raise self.retry(exc=exc)
     
+@celery_app.task(name="sincronizar_estados_ve_db")
+def sincronizar_estados_ve_db():
+    db_actual = leer_db()
+    hubo_cambios = False
+    
+    estado_redis = None 
+
+    for llamada in db_actual:
+        if llamada["status"] in ["En curso", "Disparada"]:
+            estado_redis = redis_client.get(f"call_status:{llamada['id']}")
+            
+            if estado_redis:
+                nuevo_estado = "En curso" 
+                if estado_redis in ["COMPLETED", "CONFIRMED"]:
+                    nuevo_estado = "Confirmada"
+                elif estado_redis in ["FAILED", "BUSY", "NOANSWER"]:
+                    nuevo_estado = "Fallida"
+                if llamada["status"] != nuevo_estado:
+                    llamada["status"] = nuevo_estado
+                    hubo_cambios = True
+                    print(f"[Beat] Actualizando ID {llamada['id']} a {nuevo_estado}")
+
+    if hubo_cambios:
+        guardar_db(db_actual)
+    else:
+        print(f"[Beat] No hubo cambios al sincronizar con Redis. (Estado detectado: {estado_redis})")
+
 @celery_app.task(name="revisar_agenda_y_disparar")
 def revisar_agenda_y_disparar():
     db_actual = leer_db()
@@ -104,10 +109,12 @@ def revisar_agenda_y_disparar():
     for llamada in db_actual:
         if llamada["status"] == "Agendado": 
             fecha_llamada = datetime.strptime(llamada["date"], "%Y-%m-%d %H:%M:%S")
-            if fecha_llamada <= ahora or "task_id" not in llamada:
-                print(f"[Beat] Rescatando llamada de {llamada['username']}...")
-                task = disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
-                llamada["task_id"] = task.id
+            if ahora >= fecha_llamada and ahora <= (fecha_llamada + timedelta(minutes=2)):
+                print(f"[Beat] ¡Hora de disparar llamada agendada para {llamada['phone']}!")
+                llamada["status"] = "Disparada"
                 hubo_cambios = True
+                
+                disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
+
     if hubo_cambios:
         guardar_db(db_actual)
