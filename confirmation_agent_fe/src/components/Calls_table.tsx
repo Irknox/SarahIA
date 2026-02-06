@@ -72,6 +72,12 @@ const Calls_table = () => {
 
   useEffect(() => {
     fetchCallData();
+
+    const interval = setInterval(() => {
+      fetchCallData();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleDeleteClick = (call: CallData) => {
@@ -334,7 +340,9 @@ const Calls_table = () => {
                       <input
                         type="date"
                         defaultValue={item.date.split(" ")[0]}
-                        onChange={(e) => setEdit_form({ ...Edit_form, date: e.target.value })}
+                        onChange={(e) =>
+                          setEdit_form({ ...Edit_form, date: e.target.value })
+                        }
                         className="w-full bg-white/85 border border-white/10 rounded px-2 py-1 text-sm text-black focus:border-brand outline-none cursor-pointer"
                         style={{ colorScheme: "light" }}
                       />
@@ -347,7 +355,9 @@ const Calls_table = () => {
                       </label>
                       <input
                         type="time"
-                        onChange={(e) => setEdit_form({ ...Edit_form, time: e.target.value })}
+                        onChange={(e) =>
+                          setEdit_form({ ...Edit_form, time: e.target.value })
+                        }
                         defaultValue={item.date.split(" ")[1]?.substring(0, 5)}
                         className="w-full bg-white/85 border border-white/10 rounded px-2 py-1 text-sm text-black focus:border-brand outline-none cursor-pointer"
                         style={{ colorScheme: "light" }}

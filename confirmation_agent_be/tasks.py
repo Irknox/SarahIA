@@ -4,10 +4,14 @@ from celery import Celery
 from dotenv import load_dotenv
 from datetime import datetime
 from utils import leer_db, guardar_db
+import redis
 
 load_dotenv()
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://:password@127.0.0.1:6380/0")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+redis_client = redis.StrictRedis.from_url(REDIS_URL, decode_responses=True)
+
 
 celery_app = Celery(
     "Sarah_tasks",
@@ -21,6 +25,11 @@ celery_app.conf.update(
     result_serializer='json',
     timezone='Europe/Madrid',  
     enable_utc=False,
+    task_acks_late=True,            
+    task_reject_on_worker_lost=True,
+    broker_transport_options={
+        'visibility_timeout': 3600   
+    }
 )
 
 celery_app.conf.beat_schedule = {
@@ -28,13 +37,36 @@ celery_app.conf.beat_schedule = {
         'task': 'revisar_agenda_y_disparar',
         'schedule': 60.0,
     },
+    'sincronizar-estados-redis-db': {
+        'task': 'sincronizar_estados_ve_db',
+        'schedule': 15.0, 
+    },
 }
 
 AMI_CONTROL_URL = os.getenv("AMI_URL",)
 AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=10)
+@celery_app.task(name="sincronizar_estados_ve_db")
+def sincronizar_estados_ve_db():
+    db_actual = leer_db()
+    hubo_cambios = False
+    for llamada in db_actual:
+        if llamada["status"] in ["Agendado", "En curso", "Fallida"]:
+            estado_redis = redis_client.get(f"status:{llamada['phone']}")           
+            if estado_redis:
+                if estado_redis in ["CALLING_AI", "RINGING_HUMAN", "IN_PROGRESS"]:
+                    if llamada["status"] != "En curso":
+                        llamada["status"] = "En curso"
+                        hubo_cambios = True
+                elif "FAILED" in estado_redis:
+                    if llamada["status"] != "Fallida":
+                        llamada["status"] = "Fallida"
+                        hubo_cambios = True
+    if hubo_cambios:
+        guardar_db(db_actual)
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
 def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
     payload = {
         "user_phone": user_phone,

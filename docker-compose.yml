@@ -116,6 +116,9 @@ services:
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro  
+    ports:
+      - "7373:7373"
+      - "7001:7001"
     depends_on:
       sarahai-frontend:
         condition: service_started
