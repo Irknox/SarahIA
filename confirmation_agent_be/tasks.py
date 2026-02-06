@@ -64,7 +64,10 @@ def sincronizar_estados_ve_db():
                         llamada["status"] = "Fallida"
                         hubo_cambios = True
     if hubo_cambios:
+        print(f"[Beat] cambios guardados en DB después de sincronizar con Redis (último estado Redis: {estado_redis})")
         guardar_db(db_actual)
+    else :
+        print(f"[Beat] No hubo cambios al sincronizar con Redis (último estado Redis: {estado_redis})")
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
 def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
@@ -98,7 +101,6 @@ def revisar_agenda_y_disparar():
     db_actual = leer_db()
     ahora = datetime.now()
     hubo_cambios = False
-
     for llamada in db_actual:
         if llamada["status"] == "Agendado": 
             fecha_llamada = datetime.strptime(llamada["date"], "%Y-%m-%d %H:%M:%S")
@@ -107,6 +109,5 @@ def revisar_agenda_y_disparar():
                 task = disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
                 llamada["task_id"] = task.id
                 hubo_cambios = True
-
     if hubo_cambios:
         guardar_db(db_actual)

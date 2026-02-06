@@ -33,6 +33,7 @@ async def elevenlabs_pre_call_webhook(
     email=call_context.get("email")
     type=call_context.get("type")
     indications=call_context.get("indications")
+    print(f"Contexto para la llamada del usuario {username}: {call_context}")
     return {
         "type": "conversation_initiation_client_data",
         "dynamic_variables": {
