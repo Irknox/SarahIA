@@ -78,24 +78,20 @@ def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
 def sincronizar_estados_ve_db():
     db_actual = leer_db()
     hubo_cambios = False
-    
     estado_redis = None 
-
     for llamada in db_actual:
-        if llamada["status"] in ["En curso", "Disparada"]:
+        if llamada["status"] in ["En curso"]:
             estado_redis = redis_client.get(f"call_status:{llamada['id']}")
-            
             if estado_redis:
                 nuevo_estado = "En curso" 
                 if estado_redis in ["COMPLETED", "CONFIRMED"]:
                     nuevo_estado = "Confirmada"
                 elif estado_redis in ["FAILED", "BUSY", "NOANSWER"]:
                     nuevo_estado = "Fallida"
-                if llamada["status"] != nuevo_estado:
+                if llamada["status"] != nuevo_estado and llamada["status"!= "DISPATCHED"]:
                     llamada["status"] = nuevo_estado
                     hubo_cambios = True
                     print(f"[Beat] Actualizando ID {llamada['id']} a {nuevo_estado}")
-
     if hubo_cambios:
         guardar_db(db_actual)
     else:
@@ -111,9 +107,8 @@ def revisar_agenda_y_disparar():
             fecha_llamada = datetime.strptime(llamada["date"], "%Y-%m-%d %H:%M:%S")
             if ahora >= fecha_llamada and ahora <= (fecha_llamada + timedelta(minutes=2)):
                 print(f"[Beat] ¡Hora de disparar llamada agendada para {llamada['phone']}!")
-                llamada["status"] = "Disparada"
+                llamada["status"] = "En curso"
                 hubo_cambios = True
-                
                 disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
 
     if hubo_cambios:
