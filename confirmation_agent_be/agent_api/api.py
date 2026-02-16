@@ -46,3 +46,38 @@ async def elevenlabs_pre_call_webhook(
             }
         }
     } 
+
+
+@app.post("/webhooks/voice_recording_webhook")
+async def notify_voice_recording(
+        request: Request,    
+        auth_token: Optional[str] = Header(None, alias="auth-token")
+    ):
+    if auth_token != Token_API:
+        print(f"Intento de acceso no autorizado con token: {auth_token}")
+        raise HTTPException(status_code=401, detail="No autorizado: Token inválido")
+    payload = await request.json()
+    print(f"📲 Webhook pre-llamada recibido: {payload}")
+    caller_id = payload.get("caller_id", "")
+    call_id=payload.get("conversation_id", "")
+    call_context= get_call_context(caller_id, call_id)
+    username=call_context.get("username")
+    email=call_context.get("email")
+    type=call_context.get("type")
+    indications=call_context.get("indications")
+    print(f"Contexto para la llamada del usuario {username}: {call_context}")
+    return {
+        "type": "conversation_initiation_client_data",
+        "dynamic_variables": {
+            "user_name": username,
+            "type": type,
+            "indications": indications,
+        },
+        "conversation_config_override": {
+            "agent": {
+                "first_message": f"Hola {username}, Soy Sarah de Eurofirms!"
+            }
+        }
+    } 
+
+

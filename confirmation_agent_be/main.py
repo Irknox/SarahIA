@@ -16,6 +16,7 @@ TOKEN = os.getenv("NEXT_PUBLIC_AUTH_TOKEN")
 AMI_EXTENSION = os.getenv("AMI_EXTENSION")
 
 async def verify_token(auth_token: str = Header(None, alias="Auth-Token")):
+    print(f"Verificando token: {auth_token} contra token: {TOKEN}")
     if auth_token != TOKEN:
         raise HTTPException(
             status_code=401, 
