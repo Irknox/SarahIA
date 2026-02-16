@@ -42,7 +42,7 @@ async def elevenlabs_pre_call_webhook(
         },
         "conversation_config_override": {
             "agent": {
-                "first_message": f"Hola {username}, soy Silver de Moovin! ¿Cómo puedo ayudarte hoy?"
+                "first_message": f"Hola {username}, Soy Sarah de Eurofirms!"
             }
         }
     } 

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from utils import leer_db, guardar_db
 import redis
+import json
 
 load_dotenv()
 
@@ -26,6 +27,8 @@ celery_app.conf.update(
     timezone='Europe/Madrid',  
     enable_utc=False,
     task_acks_late=True,            
+    task_ignore_result=True,        
+    result_expires=3600,
     task_reject_on_worker_lost=True,
     broker_transport_options={
         'visibility_timeout': 3600   
@@ -33,12 +36,8 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    'revisar-agenda-cada-60-segundos': {
-        'task': 'revisar_agenda_y_disparar',
-        'schedule': 60.0,
-    },
     'sincronizar-estados-redis-db': {
-        'task': 'sincronizar_estados_ve_db',
+        'task': 'sync_call_status',
         'schedule': 15.0, 
     },
 }
@@ -48,7 +47,10 @@ AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
-def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
+def disparar_llamada_ami(self, user_phone, alt_phone, alt_phone_2, agent_ext, call_id):
+    """
+    Tarea principal de disparo. Crea el contexto en Redis y envía a AMI Bridge.
+    """
     payload = {
         "user_phone": user_phone,
         "agent_ext": agent_ext,
@@ -59,57 +61,76 @@ def disparar_llamada_ami(self, user_phone, agent_ext, call_id):
         "Content-Type": "application/json"
     }
     try:
-        print(f"[Celery] Intentando llamada: {agent_ext} -> {user_phone}!")
-        response = requests.post(
-            AMI_CONTROL_URL, 
-            json=payload, 
-            headers=headers,
-            timeout=10
-        )
+        existing_data = redis_client.get(f"call_data:{call_id}")
+        if existing_data:
+            info = json.loads(existing_data)
+            info["status"] = "DISPATCHED"
+            info["last_called_number"] = user_phone
+        else:
+            info = {
+                "status": "DISPATCHED",
+                "phone": user_phone,
+                "alt_phone": alt_phone,
+                "alt_phone_2": alt_phone_2,
+                "last_called": "phone",
+                "last_called_number": user_phone,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
+        redis_client.set(f"call_status:{call_id}", "DISPATCHED", ex=86400)
+        print(f"[Celery] Disparando llamada ID {call_id} al número {user_phone}")
+        response = requests.post(AMI_CONTROL_URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
-        result = response.json()
-        print(f"[Celery] Éxito: {result}")
-        return result
+        return response.json()
     except requests.exceptions.RequestException as exc:
-        print(f"[Celery] Error conectando con AMI Bridge: {exc}")
+        print(f"[Celery] Error de conexión AMI ID {call_id}: {exc}")
         raise self.retry(exc=exc)
     
-@celery_app.task(name="sincronizar_estados_ve_db")
-def sincronizar_estados_ve_db():
-    db_actual = leer_db()
-    hubo_cambios = False
-    estado_redis = None 
-    for llamada in db_actual:
-        if llamada["status"] in ["En curso"]:
-            estado_redis = redis_client.get(f"call_status:{llamada['id']}")
-            if estado_redis:
-                nuevo_estado = "En curso" 
-                if estado_redis in ["COMPLETED", "CONFIRMED"]:
-                    nuevo_estado = "Confirmada"
-                elif estado_redis in ["FAILED", "BUSY", "NOANSWER"]:
-                    nuevo_estado = "Fallida"
-                if llamada["status"] != nuevo_estado and llamada["status"!= "DISPATCHED"]:
-                    llamada["status"] = nuevo_estado
-                    hubo_cambios = True
-                    print(f"[Beat] Actualizando ID {llamada['id']} a {nuevo_estado}")
-    if hubo_cambios:
-        guardar_db(db_actual)
-    else:
-        print(f"[Beat] No hubo cambios al sincronizar con Redis. (Estado detectado: {estado_redis})")
+@celery_app.task(name="sync_call_status")
+def sync_call_status():
+    """
+    Orquestador: Cruza 'call_status' (de Asterisk) con 'call_data' (contexto).
+    """
+    status_keys = redis_client.keys("call_status:*")
+    
+    for s_key in status_keys:
+        call_id = s_key.split(":")[1]
+        asterisk_status = redis_client.get(s_key)
+        raw_data = redis_client.get(f"call_data:{call_id}")
+        if not raw_data: continue
+        
+        info = json.loads(raw_data)
+        if asterisk_status != "DISPATCHED" and info["status"] == "DISPATCHED":
+            
+            if asterisk_status == "COMPLETED":
+                print(f"[Beat] Llamada {call_id} EXITOSA. Finalizando ciclo.")
+                info["status"] = "COMPLETED"
+                redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
 
-@celery_app.task(name="revisar_agenda_y_disparar")
-def revisar_agenda_y_disparar():
-    db_actual = leer_db()
-    ahora = datetime.now()
-    hubo_cambios = False
-    for llamada in db_actual:
-        if llamada["status"] == "Agendado": 
-            fecha_llamada = datetime.strptime(llamada["date"], "%Y-%m-%d %H:%M:%S")
-            if ahora >= fecha_llamada and ahora <= (fecha_llamada + timedelta(minutes=2)):
-                print(f"[Beat] ¡Hora de disparar llamada agendada para {llamada['phone']}!")
-                llamada["status"] = "En curso"
-                hubo_cambios = True
-                disparar_llamada_ami.delay(llamada["phone"], AMI_EXTENSION, llamada["id"])
+            elif asterisk_status in ["FAILED", "BUSY", "NOANSWER"]:
+                print(f"[Beat] Llamada {call_id} falló con {asterisk_status}. Evaluando reintento...")
+                next_number = None
+                next_attr = None
+                
+                if info["last_called"] == "phone" and info.get("alt_phone"):
+                    next_number = info["alt_phone"]
+                    next_attr = "alt_phone"
+                elif info["last_called"] == "alt_phone" and info.get("alt_phone_2"):
+                    next_number = info["alt_phone_2"]
+                    next_attr = "alt_phone_2"
+                
+                if next_number:
+                    print(f"[Beat] Reintentando ID {call_id} con {next_attr}: {next_number}")
+                    info["last_called"] = next_attr
+                    info["status"] = "RETRYING" 
+                    redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
+                    redis_client.set(s_key, "DISPATCHED", ex=86400)
 
-    if hubo_cambios:
-        guardar_db(db_actual)
+                    disparar_llamada_ami.apply_async(
+                        args=[next_number, info["alt_phone"], info["alt_phone_2"], AMI_EXTENSION, call_id],
+                        countdown=300 
+                    )
+                else:
+                    print(f"[Beat] ID {call_id} agotó todos los números. Marcando como FAILED.")
+                    info["status"] = "FAILED"
+                    redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)

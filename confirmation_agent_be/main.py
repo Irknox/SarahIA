@@ -40,11 +40,10 @@ app.add_middleware(
 )
 
 class RegistroLlamada(BaseModel):
-    username: str
-    email: str
+    id: str
     phone: str
-    type: str
-    status: str
+    alt_phone: str
+    alt_phone_2: str
     date: str
 
 @app.get("/")
@@ -67,28 +66,25 @@ class LlamadaSchema(BaseModel):
 @app.post("/calls/add", dependencies=[Depends(verify_token)])
 async def schedule_call(data: RegistroLlamada):
     """
-    Agenda una nueva llamada en Celery y guarda el registro en db.json
+    Recibe la instrucción de llamada y la agenda en Celery.
     """
     try:
-        nueva_entrada = data.model_dump()
-        nueva_entrada["status"] = "Agendado"
-        registro_creado = agregar_llamada(nueva_entrada)
-        
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
-        
         task = disparar_llamada_ami.apply_async(
-            args=[data.phone, AMI_EXTENSION, registro_creado["id"]], 
+            args=[
+                data.phone,       
+                data.alt_phone,    
+                data.alt_phone_2, 
+                AMI_EXTENSION,     
+                data.id     
+            ], 
             eta=local_dt
         )
-
-        actualizar_llamada(registro_creado["id"], {"task_id": task.id})
-
         return {
             "status": "success", 
-            "message": f"Llamada agendada para {data.username} a las {data.date} (Madrid)", 
-            "task_id": task.id,
-            "data": registro_creado 
+            "message": f"Llamada ID {data.id} agendada para las {data.date}", 
+            "task_id": task.id
         }
     except Exception as e:
         print(f"Error en schedule_call: {e}")
