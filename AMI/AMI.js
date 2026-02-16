@@ -51,7 +51,7 @@ app.post("/originate", async (req, res) => {
       Exten: "s",
       Priority: 1,
       Async: "true",
-      Variable: `DESTINO_HUMANO=${user_phone},__X_CALL_ID=${call_id},__X_CALLER_ID=${user_phone}`,
+      Variable: `DESTINO_HUMANO=${user_phone},X_CALL_ID=${call_id},X_CALLER_ID=${user_phone}`,
     };
 
     const response = await ami.action(actionData);
@@ -65,13 +65,11 @@ app.post("/originate", async (req, res) => {
     });
   } catch (error) {
     console.error("[AMI] Error crítico en originate:", error);
-    return res
-      .status(500)
-      .json({
-        status: "error",
-        message: "Asterisk rechazó el comando o está desconectado",
-        detail: error.message,
-      });
+    return res.status(500).json({
+      status: "error",
+      message: "Asterisk rechazó el comando o está desconectado",
+      detail: error.message,
+    });
   }
 });
 

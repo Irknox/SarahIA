@@ -1,4 +1,3 @@
-
 import sys
 import os
 
@@ -19,7 +18,7 @@ app = FastAPI(title="SarahAI API")
 @app.post("/webhooks/elevenlabs-pre-call")
 async def elevenlabs_pre_call_webhook(
         request: Request,    
-        auth_token: Optional[str] = Header(None, alias="auth_token")
+        auth_token: Optional[str] = Header(None, alias="auth-token")
     ):
     if auth_token != Token_API:
         print(f"Intento de acceso no autorizado con token: {auth_token}")
