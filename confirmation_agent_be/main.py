@@ -43,8 +43,8 @@ app.add_middleware(
 class RegistroLlamada(BaseModel):
     id: str
     phone: str
-    alt_phone: str
-    alt_phone_2: str
+    alternative_phone: str
+    alternative_phone_2: str
     date: str
 
 @app.get("/")
@@ -75,8 +75,8 @@ async def schedule_call(data: RegistroLlamada):
         task = disparar_llamada_ami.apply_async(
             args=[
                 data.phone,       
-                data.alt_phone,    
-                data.alt_phone_2, 
+                data.alternative_phone,    
+                data.alternative_phone_2, 
                 AMI_EXTENSION,     
                 data.id     
             ], 

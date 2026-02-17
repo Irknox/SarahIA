@@ -47,7 +47,7 @@ AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
-def disparar_llamada_ami(self, user_phone, alt_phone, alt_phone_2, agent_ext, call_id):
+def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_2, agent_ext, call_id):
     """
     Tarea principal de disparo. Crea el contexto en Redis y envía a AMI Bridge.
     """
@@ -70,8 +70,8 @@ def disparar_llamada_ami(self, user_phone, alt_phone, alt_phone_2, agent_ext, ca
             info = {
                 "status": "DISPATCHED",
                 "phone": user_phone,
-                "alt_phone": alt_phone,
-                "alt_phone_2": alt_phone_2,
+                "alternative_phone": alternative_phone,
+                "alternative_phone_2": alternative_phone_2,
                 "last_called": "phone",
                 "last_called_number": user_phone,
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -112,12 +112,12 @@ def sync_call_status():
                 next_number = None
                 next_attr = None
                 
-                if info["last_called"] == "phone" and info.get("alt_phone"):
-                    next_number = info["alt_phone"]
-                    next_attr = "alt_phone"
-                elif info["last_called"] == "alt_phone" and info.get("alt_phone_2"):
-                    next_number = info["alt_phone_2"]
-                    next_attr = "alt_phone_2"
+                if info["last_called"] == "phone" and info.get("alternative_phone"):
+                    next_number = info["alternative_phone"]
+                    next_attr = "alternative_phone"
+                elif info["last_called"] == "alternative_phone" and info.get("alternative_phone_2"):
+                    next_number = info["alternative_phone_2"]
+                    next_attr = "alternative_phone_2"
                 
                 if next_number:
                     print(f"[Beat] Reintentando ID {call_id} con {next_attr}: {next_number}")
@@ -127,7 +127,7 @@ def sync_call_status():
                     redis_client.set(s_key, "DISPATCHED", ex=86400)
 
                     disparar_llamada_ami.apply_async(
-                        args=[next_number, info["alt_phone"], info["alt_phone_2"], AMI_EXTENSION, call_id],
+                        args=[next_number, info["alternative_phone"], info["alternative_phone_2"], AMI_EXTENSION, call_id],
                         countdown=300 
                     )
                 else:
