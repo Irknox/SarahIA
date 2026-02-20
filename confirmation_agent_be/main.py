@@ -40,12 +40,29 @@ app.add_middleware(
     allow_headers=["*"],              
 )
 
+class ContextoLlamada(BaseModel):
+    worker_name: str
+    worker_first_name: str
+    worker_language: str
+    position: str
+    work_center: str
+    address: str
+    shift_date: str
+    shift_date_raw: str
+    shift_start_time: str
+    shift_end_time: str
+    instructions: str
+    hourly_rate: str
+    call_request_id: str
+
 class RegistroLlamada(BaseModel):
     id: str
     phone: str
     alternative_phone: str
     alternative_phone_2: str
     date: str
+    context: ContextoLlamada 
+    agent_instructions: str  
 
 @app.get("/")
 def read_root():
@@ -66,19 +83,19 @@ class LlamadaSchema(BaseModel):
 
 @app.post("/calls/add", dependencies=[Depends(verify_token)])
 async def schedule_call(data: RegistroLlamada):
-    """
-    Recibe la instrucción de llamada y la agenda en Celery.
-    """
     try:
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
+
         task = disparar_llamada_ami.apply_async(
             args=[
                 data.phone,       
                 data.alternative_phone,    
                 data.alternative_phone_2, 
                 AMI_EXTENSION,     
-                data.id     
+                data.id,
+                data.context.model_dump(), 
+                data.agent_instructions   
             ], 
             eta=local_dt
         )

@@ -1,11 +1,19 @@
 [
   {
     "id": 1,
-    "username": "Alejandro Carmona",
+    "username": "Alejandro",
+    "worker_name": "Alejandro Carmona",
+    "position": "Enfermero",
+    "work_center": "Hospital Central de Madrid",
+    "address" : "Calle Mayo 1, Av 10, Madrid",
     "email": "acarmona@moovin.me",
     "phone": "62587119",
     "type": "Confirmacion",
-    "indications":"Confirmar la cita el dia miercoles a las 10am en el Hospital Central de Madrid.",
+    "instructions": "Confirmar la cita el dia miercoles a las 10 am en el Hospital Central de Madrid.",
+    "hourly_rate": 15,
+    "shift_date_raw": "2026-01-27",
+    "shift_start_time": "2026-01-27 01:00:00",
+    "shift_end_time": "2026-01-27 02:00:00",
     "status": "En curso",
     "date": "2026-01-27 01:15:00"
   }

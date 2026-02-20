@@ -47,9 +47,9 @@ AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
-def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_2, agent_ext, call_id):
+def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_2, agent_ext, call_id, context=None, agent_instructions=None):
     """
-    Tarea principal de disparo. Crea el contexto en Redis y envía a AMI Bridge.
+    Tarea de disparo. Almacena TODO el contexto en Redis antes de llamar.
     """
     payload = {
         "user_phone": user_phone,
@@ -62,10 +62,13 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
     }
     try:
         existing_data = redis_client.get(f"call_data:{call_id}")
+        
         if existing_data:
             info = json.loads(existing_data)
             info["status"] = "DISPATCHED"
             info["last_called_number"] = user_phone
+            if context: info["context"] = context
+            if agent_instructions: info["agent_instructions"] = agent_instructions
         else:
             info = {
                 "status": "DISPATCHED",
@@ -74,11 +77,15 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
                 "alternative_phone_2": alternative_phone_2,
                 "last_called": "phone",
                 "last_called_number": user_phone,
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "context": context,             
+                "agent_instructions": agent_instructions 
             }
         redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
         redis_client.set(f"call_status:{call_id}", "DISPATCHED", ex=86400)
-        print(f"[Celery] Disparando llamada ID {call_id} al número {user_phone}")
+        
+        print(f"[Celery] Disparando llamada ID {call_id} con contexto completo guardado en Redis.")
+        
         response = requests.post(AMI_CONTROL_URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         return response.json()
