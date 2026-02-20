@@ -16,7 +16,6 @@ TOKEN = os.getenv("NEXT_PUBLIC_AUTH_TOKEN")
 AMI_EXTENSION = os.getenv("AMI_EXTENSION")
 
 async def verify_token(auth_token: str = Header(None, alias="Auth-Token")):
-    print(f"Verificando token: {auth_token} contra token: {TOKEN}")
     if auth_token != TOKEN:
         raise HTTPException(
             status_code=401, 
@@ -84,7 +83,7 @@ class LlamadaSchema(BaseModel):
 @app.post("/calls/add", dependencies=[Depends(verify_token)])
 async def schedule_call(data: RegistroLlamada):
     try:
-        print (f"Data recibida para agendar llamada: {data}")
+        print (f" Data recibida para agendar llamada: {data}")
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
 

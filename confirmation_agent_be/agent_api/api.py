@@ -29,7 +29,7 @@ async def elevenlabs_pre_call_webhook(
     payload = await request.json()
     print(f"📲 Webhook pre-llamada recibido: {payload}")
     user_phone = payload.get("caller_id")
-    call_id = payload.get("conversation_id")
+    call_id = payload.get("call_sid")
     
     
     if not call_id:
