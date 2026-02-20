@@ -55,14 +55,14 @@ async def elevenlabs_pre_call_webhook(
     #    "hourly_rate": call_context.get("hourly_rate", "No disponible"),
     #}
     
-    variables_to_11Labs = {}
+    variables_to_11Labs = {"username": "Alejandro"}
     #print(f"Contexto para la llamada del usuario {call_context.get("worker_name")}: {call_context}")
     return {
         "type": "conversation_initiation_client_data",
         "dynamic_variables": variables_to_11Labs,
         "conversation_config_override": {
             "agent": {
-                "first_message": f"Hola {variables_to_11Labs.get("username","Usuario")}, Soy Sarah de Eurofirms!",
+                "first_message": (f"Hola {variables_to_11Labs.get("username","Usuario")}, Soy Sarah de Eurofirms!"),
                 "prompt": "System prompt"
      
                 
