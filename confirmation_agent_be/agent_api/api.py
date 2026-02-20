@@ -28,7 +28,10 @@ async def elevenlabs_pre_call_webhook(
         raise HTTPException(status_code=401, detail="No autorizado: Token inválido")
     payload = await request.json()
     print(f"📲 Webhook pre-llamada recibido: {payload}")
-    call_id = payload.get("system__conversation_id")
+    user_phone = payload.get("caller_id")
+    call_id = payload.get("conversation_id")
+    
+    
     if not call_id:
         raise HTTPException(status_code=400, detail="Falta conversation_id")
     
