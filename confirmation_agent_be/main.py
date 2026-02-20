@@ -84,6 +84,7 @@ class LlamadaSchema(BaseModel):
 @app.post("/calls/add", dependencies=[Depends(verify_token)])
 async def schedule_call(data: RegistroLlamada):
     try:
+        print (f"Data recibida para agendar llamada: {data}")
         naive_dt = datetime.strptime(data.date.strip(), "%Y-%m-%d %H:%M:%S")
         local_dt = madrid_tz.localize(naive_dt)
 
