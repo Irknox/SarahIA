@@ -53,6 +53,7 @@ class ContextoLlamada(BaseModel):
     instructions: str
     hourly_rate: str
     call_request_id: str
+    confirmation: Optional[bool] = False
 
 class RegistroLlamada(BaseModel):
     id: str
