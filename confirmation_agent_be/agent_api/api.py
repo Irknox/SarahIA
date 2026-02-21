@@ -37,9 +37,16 @@ request: Request,
     if not call_id:
         raise HTTPException(status_code=400, detail="Falta conversation_id")
 
-    call_data = redis_client.get(f"call_data:{call_id}")
-    if not call_data:
+    call_data_raw = redis_client.get(f"call_data:{call_id}")
+    
+    if not call_data_raw:
         raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
+    
+    try:
+        call_data = json.loads(call_data_raw)
+    except json.JSONDecodeError:
+        print(f"❌ Error decodificando JSON de Redis para ID: {call_id}")
+        raise HTTPException(status_code=500, detail="Error interno de datos")
 
     context_dict = call_data.get("context", {}) 
     
