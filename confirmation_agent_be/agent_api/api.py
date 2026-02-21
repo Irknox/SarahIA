@@ -67,13 +67,17 @@ request: Request,
     
 
     print(f"✅ Contexto preparado para: {context_dict.get('worker_name')}")
+    
     return {
         "type": "conversation_initiation_client_data",
         "dynamic_variables": variables_to_11Labs,
         "conversation_config_override": {
             "agent": {
-                "first_message": f"Hola, Soy Sarah de Eurofirms! Hablo con {variables_to_11Labs.get('username','Usuario')}?",    
-                "prompt": agent_instructions
+                "prompt": {
+                    "prompt":agent_instructions
+                },
+                "first_message": f"Hola, Soy Sarah de Eurofirms! Tengo el gusto de hablar con {variables_to_11Labs.get('username','Usuario')}?",    
+                
             }
         }
     } 
