@@ -43,7 +43,7 @@ request: Request,
 
     context_dict = call_data.get("context", {}) 
     
-    agent_instructions = context_dict.get("agent_instructions", "No hay instrucciones específicas para el agente.")
+    agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
     
     variables_to_11Labs = {
         "username": context_dict.get("worker_first_name", "Trabajador"),
