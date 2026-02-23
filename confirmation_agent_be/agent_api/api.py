@@ -64,13 +64,11 @@ request: Request,
         "instructions": context_dict.get("instructions", "No disponible"),
         "hourly_rate": context_dict.get("hourly_rate", "No disponible"),
     }
-    
 
     print(f"✅ Contexto preparado para: {context_dict.get('worker_name')}")
     
     return {
         "type": "conversation_initiation_client_data",
-        "dynamic_variables": variables_to_11Labs,
         "conversation_config_override": {
             "agent": {
                 "prompt": {
@@ -144,6 +142,7 @@ async def applyDecision(
     
     print(f"[Tool] Decisión aplicada para ID {call_id}. Contexto actualizado")
     
+    ##outcome es el nombre status en la tabla persistente
 
     return {
         "status": "success", 
