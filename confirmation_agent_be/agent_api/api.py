@@ -33,42 +33,45 @@ request: Request,
     print(f"📲 Webhook pre-llamada recibido: {payload}")
     
     user_phone = payload.get("caller_id")
+    
     call_id = payload.get("call_sid")
+    
     if not call_id:
         raise HTTPException(status_code=400, detail="Falta conversation_id")
 
-    call_data_raw = redis_client.get(f"call_data:{call_id}")
+    #call_data_raw = redis_client.get(f"call_data:{call_id}")
     
-    if not call_data_raw:
-        raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
+    #if not call_data_raw:
+        #raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
     
-    try:
-        call_data = json.loads(call_data_raw)
-    except json.JSONDecodeError:
-        print(f"❌ Error decodificando JSON de Redis para ID: {call_id}")
-        raise HTTPException(status_code=500, detail="Error interno de datos")
+    #try:
+        #call_data = json.loads(call_data_raw)
+        
+    #except json.JSONDecodeError:
+        #print(f"❌ Error decodificando JSON de Redis para ID: {call_id}")
+        #raise HTTPException(status_code=500, detail="Error interno de datos")
 
-    context_dict = call_data.get("context", {}) 
+    #context_dict = call_data.get("context", {}) 
     
-    agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
+    #agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
     
 
-    print(f"✅ Instrucciones para llamada({type(agent_instructions)}): {agent_instructions}")
+    #print(f"✅ Instrucciones para llamada({type(agent_instructions)}): {agent_instructions}")
     
-    variables_to_11Labs = {
-        "username": context_dict.get("worker_first_name", "Trabajador"),
-        "worker_name": context_dict.get("worker_name", "No disponible"),
-        "position": context_dict.get("position", "No disponible"),
-        "work_center": context_dict.get("work_center", "No disponible"),
-        "address": context_dict.get("address", "No disponible"),
-        "shift_date": context_dict.get("shift_date", "No disponible"),
-        "shift_start_time": context_dict.get("shift_start_time", "No disponible"),
-        "shift_end_time": context_dict.get("shift_end_time", "No disponible"),
-        "instructions": context_dict.get("instructions", "No disponible"),
-        "hourly_rate": context_dict.get("hourly_rate", "No disponible"),
-    }
+    #variables_to_11Labs = {
+    #    "username": context_dict.get("worker_first_name", "Trabajador"),
+    #    "worker_name": context_dict.get("worker_name", "No disponible"),
+    #    "position": context_dict.get("position", "No disponible"),
+    #   "work_center": context_dict.get("work_center", "No disponible"),
+    #  "address": context_dict.get("address", "No disponible"),
+    #    "shift_date": context_dict.get("shift_date", "No disponible"),
+    #    "shift_start_time": context_dict.get("shift_start_time", "No disponible"),
+    #    "shift_end_time": context_dict.get("shift_end_time", "No disponible"),
+    #    "instructions": context_dict.get("instructions", "No disponible"),
+    #    "hourly_rate": context_dict.get("hourly_rate", "No disponible"),
+    #}
 
-    print(f"✅ Contexto preparado para: {context_dict.get('worker_name')}")
+    #print(f"✅ Contexto preparado para: {context_dict.get('worker_name')}")
     
     return {
         "type": "conversation_initiation_client_data",
