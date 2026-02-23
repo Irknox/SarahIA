@@ -74,8 +74,8 @@ request: Request,
         "type": "conversation_initiation_client_data",
         "conversation_config_override": {
             "agent": {
-                "prompt": agent_instructions,
-                "first_message": f"Hola, Soy Sarah de Eurofirms! ¿Tengo el gusto de hablar con {variables_to_11Labs.get('username','Usuario')}?"
+                "prompt": "Eres un agente de llamadas para una farmacia de nombre farmacoop",
+                "first_message": f"Hola, Soy Sarah de farmacoop! ¿Tengo el gusto de hablar con Alejandro?"
             }
         }
     } 
