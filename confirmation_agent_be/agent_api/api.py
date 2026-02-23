@@ -52,6 +52,9 @@ request: Request,
     
     agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
     
+
+    print(f"✅ Instrucciones para llamada({type(agent_instructions)}): {agent_instructions}")
+    
     variables_to_11Labs = {
         "username": context_dict.get("worker_first_name", "Trabajador"),
         "worker_name": context_dict.get("worker_name", "No disponible"),
@@ -71,11 +74,8 @@ request: Request,
         "type": "conversation_initiation_client_data",
         "conversation_config_override": {
             "agent": {
-                "prompt": {
-                    "prompt":agent_instructions
-                },
-                "first_message": f"Hola, Soy Sarah de Eurofirms! Tengo el gusto de hablar con {variables_to_11Labs.get('username','Usuario')}?",    
-                
+                "prompt": agent_instructions,
+                "first_message": f"Hola, Soy Sarah de Eurofirms! ¿Tengo el gusto de hablar con {variables_to_11Labs.get('username','Usuario')}?"
             }
         }
     } 
