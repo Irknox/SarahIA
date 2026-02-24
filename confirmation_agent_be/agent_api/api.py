@@ -80,7 +80,7 @@ request: Request,
         #"prompt": {
         #    "prompt": f"Eres Sarah, asistente de la compania farmaceutica farmacorp, asistes a los usuarios.",
         #},
-        "first_message": f"Hola Alejandro, soy Sarah",
+        #"first_message": f"Hola Alejandro, soy Sarah",
     },
             
         }
