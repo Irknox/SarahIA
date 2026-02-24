@@ -78,7 +78,7 @@ request: Request,
         "conversation_config_override": {
             "agent": {
         "prompt": {
-            "prompt": agent_instructions,
+            "prompt": "Eres Sara, asistente de Farmacorp",
         },
         "first_message": f"Hola Alejandro, soy Sarah",
     },
