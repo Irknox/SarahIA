@@ -77,9 +77,13 @@ request: Request,
         "type": "conversation_initiation_client_data",
         "conversation_config_override": {
             "agent": {
-                "prompt": "Eres un agente de llamadas para una farmacia de nombre farmacoop",
-                "first_message": f"Hola, Soy Sarah de farmacoop! ¿Tengo el gusto de hablar con Alejandro?"
-            }
+        "prompt": {
+            "prompt": f"Eres Sarah, asistente de la compania farmaceutica farmacorp, asistes a los usuarios.",
+        },
+        "first_message": f"Hola Alejandro, soy Sarah",
+        "language": "en" 
+    },
+            
         }
     } 
 
