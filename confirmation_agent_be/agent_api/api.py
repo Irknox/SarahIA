@@ -39,21 +39,21 @@ request: Request,
     if not call_id:
         raise HTTPException(status_code=400, detail="Falta conversation_id")
 
-    call_data_raw = redis_client.get(f"call_data:{call_id}")
+    #call_data_raw = redis_client.get(f"call_data:{call_id}")
     
-    if not call_data_raw:
-        raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
+    #if not call_data_raw:
+        #raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
     
-    try:
-        call_data = json.loads(call_data_raw)
+    #try:
+        #call_data = json.loads(call_data_raw)
         
-    except json.JSONDecodeError:
-        print(f"❌ Error decodificando JSON de Redis para ID: {call_id}")
-        raise HTTPException(status_code=500, detail="Error interno de datos")
+    #except json.JSONDecodeError:
+        #print(f"❌ Error decodificando JSON de Redis para ID: {call_id}")
+        #raise HTTPException(status_code=500, detail="Error interno de datos")
 
-    context_dict = call_data.get("context", {}) 
+    #context_dict = call_data.get("context", {}) 
     
-    agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
+    #agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
     
 
     #print(f"✅ Instrucciones para llamada({type(agent_instructions)}): {agent_instructions}")
@@ -78,7 +78,7 @@ request: Request,
         "conversation_config_override": {
             "agent": {
         "prompt": {
-            "prompt": "Eres Sara, asistente de Farmacorp",
+            "prompt": f"Eres Sarah, asistente de la compania farmaceutica farmacorp, asistes a los usuarios.",
         },
         "first_message": f"Hola Alejandro, soy Sarah",
     },
