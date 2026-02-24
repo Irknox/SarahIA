@@ -77,10 +77,10 @@ request: Request,
         "type": "conversation_initiation_client_data",
         "conversation_config_override": {
             "agent": {
-        #"prompt": {
-        #    "prompt": f"Eres Sarah, asistente de la compania farmaceutica farmacorp, asistes a los usuarios.",
-        #},
-        #"first_message": f"Hola Alejandro, soy Sarah",
+        "prompt": {
+            "prompt": f"Eres Sarah, asistente de la compania farmaceutica farmacorp, asistes a los usuarios.",
+        },
+        "first_message": f"Hola Alejandro, soy Sarah",
     },
             
         }
