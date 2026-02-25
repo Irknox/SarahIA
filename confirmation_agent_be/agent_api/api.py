@@ -9,6 +9,9 @@ from utils import get_call_context
 from typing import Dict, Any, Optional
 import redis
 import json
+import hmac
+import hashlib
+
 
 load_dotenv()
 Token_API=os.environ.get('NEXT_PUBLIC_AUTH_TOKEN')
@@ -81,35 +84,96 @@ request: Request,
         }
     } 
 
+WEBHOOK_SECRET=os.environ.get("ELEVENLABS_WEBHOOK_SIGNATURE")
+@app.post("/webhooks/elevenlabs-post-call")
+async def elevenlabs_post_call_webhook(request: Request):
+    payload_raw = await request.body()
+    signature_header = request.headers.get("elevenlabs-signature") 
+    if not signature_header:
+        print("🔴 Webhook recibido sin firma")
+        raise HTTPException(status_code=401, detail="Missing signature")
+    try:
+        parts = dict(x.split('=') for x in signature_header.split(','))
+        timestamp = parts.get('t')
+        received_hash = parts.get('v0')
+        signed_payload = f"{timestamp}.{payload_raw.decode('utf-8')}"
+        
+        expected_hash = hmac.new(
+            WEBHOOK_SECRET.encode(),
+            signed_payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(received_hash, expected_hash):
+            print("❌ Firma de Webhook inválida")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+    except Exception as e:
+        print(f"⚠️ Error al validar firma: {e}")
+        raise HTTPException(status_code=401, detail="Signature validation failed")
+    payload = json.loads(payload_raw)
+    print(f"✅ Webhook post-llamada recibido y validado: {payload}")
+    #event_type = payload.get("type")
+    #data = payload.get("data", {})
+    #if event_type == "post_call_transcription":
+    #    analysis = data.get("analysis", {})
+    #    summary_en = analysis.get("transcript_summary", "")
+    #    dynamic_vars = data.get("conversation_initiation_client_data", {}).get("dynamic_variables", {})
+    #    caller_id = dynamic_vars.get("system__caller_id", "Unknown")
+    #    event_time = payload.get("event_timestamp") 
+    #
+    #   print(f"📝 Proceso completado para {caller_id}")
+    return {"status": "received"}
+
 
 ##---------------------------------Tools de ElevenLabs ---------------------------------##
-@app.post("/webhooks/voice-recording")
-async def notify_voice_recording(
-        request: Request,    
-        auth_token: Optional[str] = Header(None, alias="auth-token")
-    ):
+@app.post("/webhooks/call-issue-detected")
+async def notify_call_issue(
+    request: Request,    
+    auth_token: Optional[str] = Header(None, alias="auth-token")
+):
     if auth_token != Token_API:
-        print(f"Intento de acceso no autorizado con token: {auth_token}")
-        raise HTTPException(status_code=401, detail="No autorizado: Token inválido")
+        raise HTTPException(status_code=401, detail="No autorizado")
     
-    payload = await request.json()
-    call_id = payload.get("system__conversation_id")
+    payload = await request.json() 
+    call_params = payload.get("call_info", {})
+    reason = payload.get("reason", "IA detectó buzón de voz")
+    call_id = call_params.get("system__conversation_id")
+    phone_reported = call_params.get("phone")
     
-    if not call_id:
-        raise HTTPException(status_code=400, detail="Falta conversation_id")
-
-    status_key = f"call_status:{call_id}"
-    if not redis_client.exists(status_key):
-        return {"status": "error", "message": "ID de llamada no encontrado en Redis"}
-
-    redis_client.set(status_key, "FAILED", ex=86400)
+    raw_data = redis_client.get(f"call_data:{call_id}")
+    if not raw_data:
+        raise HTTPException(status_code=404, detail="Llamada no encontrada")
     
-    print(f"[Webhook] Buzón detectado en ID {call_id}. Forzando reintento vía Celery Beat.")
+    call_data = json.loads(raw_data)
+    call_record = call_data.get("call_record", {})
+    
+    target_attr = None
+    for attr in ["phone", "alternative_phone", "alternative_phone_2"]:
+        if call_data.get(attr) == phone_reported:
+            target_attr = attr
+            break
 
-    return {
-        "status": "success", 
-        "message": "Voice recording notification received, retry triggered"
-    }
+    if not target_attr:
+        return {"status": "error", "message": "Número no reconocido"}
+
+    already_failed = False
+    if target_attr in call_record and call_record[target_attr].get("status") in ["FAILED", "BUSY", "NOANSWER", "FAILED_AST"]:
+        already_failed = True
+
+    if already_failed:
+        call_record[target_attr]["failed_reason"] = f"{reason} (Confirmado por IA)"
+    else:
+        call_record[target_attr] = {
+            "number": phone_reported,
+            "status": "FAILED",
+            "failed_reason": reason
+        }
+        redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
+        print(f"[Webhook] IA reporta fallo primero para {phone_reported}. Marcando FAILED global.")
+
+    call_data["call_record"] = call_record
+    redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
+    
+    return {"status": "success"}
     
 
 @app.post("/tools/set-decision")
@@ -143,7 +207,7 @@ async def applyDecision(
     
     print(f"[Tool] Decisión aplicada para ID {call_id}. Contexto actualizado")
     
-    ##outcome es el nombre status en la tabla persistente
+    ##outcome es el nombre confirmation en la tabla persistente
 
     return {
         "status": "success", 

@@ -75,8 +75,14 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
                 "phone": user_phone,
                 "alternative_phone": alternative_phone,
                 "alternative_phone_2": alternative_phone_2,
-                "last_called": "phone",
-                "last_called_number": user_phone,
+                "call_record": { 
+                    "last_called": "phone",
+                    "phone": { 
+                        "number": user_phone,
+                        "status": "DISPATCHED",
+                        "failed_reason": None
+                    },  
+                },
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "context": context,             
                 "agent_instructions": agent_instructions 
@@ -106,38 +112,50 @@ def sync_call_status():
         raw_data = redis_client.get(f"call_data:{call_id}")
         if not raw_data: continue
         
-        info = json.loads(raw_data)
-        if asterisk_status != "DISPATCHED" and info["status"] == "DISPATCHED":
+        call_data = json.loads(raw_data)
+        if asterisk_status != "DISPATCHED" and call_data["status"] == "DISPATCHED":
+            last_called = call_data["call_record"]["last_called"]
             
             if asterisk_status == "COMPLETED":
                 print(f"[Beat] Llamada {call_id} EXITOSA. Finalizando ciclo.")
-                info["status"] = "COMPLETED"
-                redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
+                call_data["status"] = "COMPLETED"
+                call_data["call_record"][last_called]["status"] = "COMPLETED"
+                redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
 
             elif asterisk_status in ["FAILED", "BUSY", "NOANSWER"]:
                 print(f"[Beat] Llamada {call_id} falló con {asterisk_status}. Evaluando reintento...")
                 next_number = None
                 next_attr = None
                 
-                if info["last_called"] == "phone" and info.get("alternative_phone"):
-                    next_number = info["alternative_phone"]
+                
+                if last_called == "phone" and call_data.get("alternative_phone"):
+                    next_number = call_data["alternative_phone"]
                     next_attr = "alternative_phone"
-                elif info["last_called"] == "alternative_phone" and info.get("alternative_phone_2"):
-                    next_number = info["alternative_phone_2"]
+                elif last_called == "alternative_phone" and call_data.get("alternative_phone_2"):
+                    next_number = call_data["alternative_phone_2"]
                     next_attr = "alternative_phone_2"
+                
                 
                 if next_number:
                     print(f"[Beat] Reintentando ID {call_id} con {next_attr}: {next_number}")
-                    info["last_called"] = next_attr
-                    info["status"] = "RETRYING" 
-                    redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
+                    call_data["call_record"][last_called]["status"]="FAILED"
+                    
+                    call_data["call_record"]["last_called"] = next_attr
+                    call_data["status"] = "RETRYING" 
+                    if not call_data[next_attr]:
+                        call_data[next_attr] = {
+                        "number": next_number,
+                        "status": "DISPATCHED",
+                        "failed_reason": asterisk_status
+                        }
+                    redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
                     redis_client.set(s_key, "DISPATCHED", ex=86400)
 
                     disparar_llamada_ami.apply_async(
-                        args=[next_number, info["alternative_phone"], info["alternative_phone_2"], AMI_EXTENSION, call_id],
+                        args=[next_number, call_data["alternative_phone"], call_data["alternative_phone_2"], AMI_EXTENSION, call_id],
                         countdown=300 
                     )
                 else:
                     print(f"[Beat] ID {call_id} agotó todos los números. Marcando como FAILED.")
-                    info["status"] = "FAILED"
-                    redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
+                    call_data["status"] = "FAILED"
+                    redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
