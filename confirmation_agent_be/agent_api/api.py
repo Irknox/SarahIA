@@ -22,6 +22,35 @@ redis_client = redis.StrictRedis.from_url(REDIS_URL, decode_responses=True)
 
 app = FastAPI(title="SarahAI API")
 
+
+##-----------------------Tools----------------##
+async def applyDecision(params):    
+    confirmation = params.get("confirmation")
+    call_id = params.get("call_id")
+    reason = params.get("reason")
+
+    if not call_id:
+        raise HTTPException(status_code=400, detail="Falta conversation_id")
+
+    call_data = redis_client.get(f"call_data:{call_id}")
+    if not call_data:
+        raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
+
+    context_dict = call_data.get("context", {}) 
+    
+    context_dict["confirmation"] = confirmation
+    
+    redis_client.hset(f"call_data:{call_id}", "context", json.dumps(context_dict))
+    
+    print(f"[Tool] Decisión aplicada para ID {call_id}. Contexto actualizado")
+    
+
+    return {
+        "status": "success", 
+        "message": "Call issue reported, retry triggered"
+    }
+
+
 ##---------------------------------Webhooks para ElevenLabs ---------------------------------##
 @app.post("/webhooks/elevenlabs-pre-call")
 async def elevenlabs_pre_call_webhook(
@@ -136,7 +165,7 @@ async def notify_call_issue(
     payload = await request.json() 
     call_params = payload.get("call_info", {})
     reason = payload.get("reason", "IA detectó buzón de voz")
-    call_id = call_params.get("system__conversation_id")
+    call_id = call_params.get("call_id")
     phone_reported = call_params.get("phone")
     
     raw_data = redis_client.get(f"call_data:{call_id}")
@@ -174,10 +203,10 @@ async def notify_call_issue(
     redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
     
     return {"status": "success"}
-    
 
-@app.post("/tools/set-decision")
-async def applyDecision(
+
+@app.post("/tools")
+async def tools_endpoint(
         request: Request,    
         auth_token: Optional[str] = Header(None, alias="auth-token")
     ):
@@ -186,30 +215,13 @@ async def applyDecision(
         raise HTTPException(status_code=401, detail="No autorizado: Token inválido")
     
     payload = await request.json()
-    print(f"📲 Webhook pre-llamada recibido: {payload}")
+    print(f"🧰 Tool solicitada por agente: {payload}")
     
-    user_phone = payload.get("caller_id")
-    call_id = payload.get("system__conversation_id")
-    
-    if not call_id:
-        raise HTTPException(status_code=400, detail="Falta conversation_id")
+    tool_request=payload.get("tool")
+    params=payload.get("tool_params", {})
 
-    call_data = redis_client.get(f"call_data:{call_id}")
-    if not call_data:
-        raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
+    if tool_request=="applyDecision":
+        return applyDecision(params)
 
-    context_dict = call_data.get("context", {}) 
-    
-    context_dict["confirmation"] = payload.get("confirmation", False)
-    
-    redis_client.hset(f"call_data:{call_id}", "context", json.dumps(context_dict))
-    
-    
-    print(f"[Tool] Decisión aplicada para ID {call_id}. Contexto actualizado")
-    
-    ##outcome es el nombre confirmation en la tabla persistente
 
-    return {
-        "status": "success", 
-        "message": "Voice recording notification received, retry triggered"
-    }
+    
