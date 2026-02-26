@@ -140,16 +140,8 @@ async def elevenlabs_post_call_webhook(request: Request):
         raise HTTPException(status_code=401, detail="Signature validation failed")
     payload = json.loads(payload_raw)
     print(f"✅ Webhook post-llamada recibido y validado: {payload}")
-    #event_type = payload.get("type")
-    #data = payload.get("data", {})
-    #if event_type == "post_call_transcription":
-    #    analysis = data.get("analysis", {})
-    #    summary_en = analysis.get("transcript_summary", "")
-    #    dynamic_vars = data.get("conversation_initiation_client_data", {}).get("dynamic_variables", {})
-    #    caller_id = dynamic_vars.get("system__caller_id", "Unknown")
-    #    event_time = payload.get("event_timestamp") 
-    #
-    #   print(f"📝 Proceso completado para {caller_id}")
+
+
     return {"status": "received"}
 
 
@@ -221,7 +213,7 @@ async def tools_endpoint(
     params=payload.get("tool_params", {})
 
     if tool_request=="applyDecision":
-        return applyDecision(params)
+        return await applyDecision(params)
 
 
     

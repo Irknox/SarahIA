@@ -81,6 +81,7 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
                         "number": user_phone,
                         "status": "DISPATCHED",
                         "failed_reason": None
+                        
                     },  
                 },
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
