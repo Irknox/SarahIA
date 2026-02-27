@@ -76,3 +76,6 @@ def get_call_context(phone: str, id_call: int):
             }
             
     return {}
+
+def send_call_report(call_id,call_data):
+    print (f"Esta es la data: {call_data}, este es el ID {call_id}")

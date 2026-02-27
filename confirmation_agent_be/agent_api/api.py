@@ -25,29 +25,29 @@ app = FastAPI(title="SarahAI API")
 
 ##-----------------------Tools----------------##
 async def applyDecision(params):    
-    confirmation = params.get("confirmation")
+    confirmation = params.get("confirmation") 
     call_id = params.get("call_id")
-    reason = params.get("reason")
-
+    
     if not call_id:
-        raise HTTPException(status_code=400, detail="Falta conversation_id")
+        raise HTTPException(status_code=400, detail="Falta call_id")
 
-    call_data = redis_client.get(f"call_data:{call_id}")
-    if not call_data:
+    raw_data = redis_client.get(f"call_data:{call_id}")
+    if not raw_data:
         raise HTTPException(status_code=404, detail="Datos de llamada no encontrados")
 
-    context_dict = call_data.get("context", {}) 
+    call_data = json.loads(raw_data)
     
-    context_dict["confirmation"] = confirmation
+    call_data["context"]["confirmation"] = confirmation
     
-    redis_client.hset(f"call_data:{call_id}", "context", json.dumps(context_dict))
+    call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
     
-    print(f"[Tool] Decisión aplicada para ID {call_id}. Contexto actualizado")
-    
+    print(f"[Tool] Decisión '{confirmation}' aplicada para ID {call_id}.")
 
     return {
         "status": "success", 
-        "message": "Call issue reported, retry triggered"
+        "message": f"Decisión {confirmation} registrada"
     }
 
 
@@ -140,9 +140,52 @@ async def elevenlabs_post_call_webhook(request: Request):
         raise HTTPException(status_code=401, detail="Signature validation failed")
     payload = json.loads(payload_raw)
     print(f"✅ Webhook post-llamada recibido y validado: {payload}")
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+    
+    if event_type == "call_initiation_failure":
+        print (f"Falla en inicio de llamada reportado desde el webhook :{data}")
+        return {"status": "received"}
+    elif event_type == "post_call_audio":
+        print (f"Audio recibido post llamada :{data}")
+        return {"status": "received"}
+    elif event_type == "post_call_transcription":
+        metadata = data.get("metadata", {})
+        phone_call = metadata.get("phone_call", {})
+        
+        call_id = phone_call.get("call_sid") 
+        termination_reason = metadata.get("termination_reason") 
+        
+        if not call_id:
+            print("🔴 Error: No se encontró call_sid en el payload")
+            return {"status": "error", "message": "No call_sid found"}
 
+        analysis_data = data.get("analysis", {})
+        elevenlabs_analysis = {
+            "success": analysis_data.get("call_successful"), 
+            "termination_reason": termination_reason,        
+            "summary": analysis_data.get("transcript_summary", ""),
+            "evaluation_criteria": analysis_data.get("evaluation_criteria_results_list", ""),       
+            "data_collection": analysis_data.get("data_collection_results_list", ""),
+            "dynamic_vars": analysis_data.get("dynamic_variables", "")
+        }
 
-    return {"status": "received"}
+        raw_redis_data = redis_client.get(f"call_data:{call_id}")
+        if not raw_redis_data:
+            return {"status": "error", "message": "Call not found in Redis"}
+
+        full_call_data = json.loads(raw_redis_data)
+        call_record = full_call_data.get("call_record", {})
+        last_called_attr = call_record.get("last_called", "phone")
+
+        if last_called_attr in call_record:
+            call_record[last_called_attr]["elevenlabs_analysis"] = elevenlabs_analysis
+            full_call_data["call_record"] = call_record
+            
+            redis_client.set(f"call_data:{call_id}", json.dumps(full_call_data), ex=86400)
+            print(f"✅ Análisis guardado para {call_id} en el registro '{last_called_attr}'")
+
+        return {"status": "received"}
 
 
 ##---------------------------------Tools de ElevenLabs ---------------------------------##
