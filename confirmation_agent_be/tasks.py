@@ -112,41 +112,16 @@ def sync_call_status():
         raw_data = redis_client.get(f"call_data:{call_id}")
         if not raw_data: continue
         
-        call_data = json.loads(raw_data)
-        call_record = call_data.get("call_record", {})
-        last_attr = call_record.get("last_called", "phone")
-        
-
-        current_attempt = call_record.get(last_attr, {})
-        has_analysis = "elevenlabs_analysis" in current_attempt
-
-        user_decision = call_data.get("context", {}).get("confirmation") 
-        is_decided = user_decision in ["Turno confirmado", "Turno denegado"]
-        
-
+        call_data = json.loads(raw_data)     
         updated_at = datetime.strptime(call_data["updated_at"], "%Y-%m-%d %H:%M:%S")
         timeout_reached = datetime.now() > (updated_at + timedelta(minutes=5))
 
-        if asterisk_status == "COMPLETED":
-        
-            if is_decided and has_analysis:
-                print(f"[Beat] {call_id}: Éxito total. Enviando reporte.")
-                return finalizar_y_reportar(call_id, call_data, "COMPLETED")
-
-            elif (is_decided or has_analysis) and not timeout_reached:
-                print(f"[Beat] {call_id}: En espera de datos finales (Análisis/Tool)...")
-                continue
-
-            elif is_decided and timeout_reached:
-                print(f"[Beat] {call_id}: Timeout de análisis alcanzado, pero hay decisión. Reportando.")
-                return finalizar_y_reportar(call_id, call_data, "COMPLETED")
-
-
-            elif (has_analysis and not is_decided) or (not is_decided and timeout_reached):
-                print(f"[Beat] {call_id}: Sin decisión del usuario. Evaluando reintento.")
-                preparar_reintento_o_fallo(call_id, call_data, s_key)
-
-
+        if asterisk_status == "COMPLETED":       
+            print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
+            return finalizar_y_reportar(call_id, call_data, "COMPLETED")
+        elif timeout_reached:
+            print(f"[Beat] {call_id}: Tiempo limite alcanzado, ultimo estado: {asterisk_status}.")
+            return finalizar_y_reportar(call_id, call_data, asterisk_status)
         elif asterisk_status in ["FAILED", "BUSY", "NOANSWER"]:
             print(f"[Beat] {call_id}: Fallo de red/técnico ({asterisk_status}).")
             preparar_reintento_o_fallo(call_id, call_data, s_key)
@@ -159,37 +134,45 @@ def finalizar_y_reportar(call_id, call_data, final_status):
     return send_call_report(call_id, call_data)
 
 def preparar_reintento_o_fallo(call_id, call_data, s_key):
-    call_record = call_data["call_record"]
-    last_attr = call_record["last_called"]
-    
-    retry_map = {
-        "phone": "alternative_phone",
-        "alternative_phone": "alternative_phone_2",
-        "alternative_phone_2": None
-    }
-    
-    next_attr = retry_map.get(last_attr)
-    next_number = call_data.get(next_attr) if next_attr else None
-
-    if next_number:
-        print(f"[Beat] Reintentando {call_id} -> {next_attr}: {next_number}")
-        call_record[last_attr]["status"] = "FAILED"
-        call_record["last_called"] = next_attr
-        call_record[next_attr] = {
-            "number": next_number,
-            "status": "DISPATCHED",
-            "failed_reason": None
-        }
-        call_data["status"] = "RETRYING"
-        call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        call_record = call_data["call_record"]
+        last_attr = call_record["last_called"]
         
-        redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
-        redis_client.set(s_key, "DISPATCHED", ex=86400)
+        retry_map = {
+            "phone": "alternative_phone",
+            "alternative_phone": "alternative_phone_2",
+            "alternative_phone_2": None
+        }
+        
+        next_attr = retry_map.get(last_attr)
+        next_number = call_data.get(next_attr) if next_attr else None
 
-        disparar_llamada_ami.apply_async(
-            args=[next_number, call_data["alternative_phone"], call_data.get("alternative_phone_2"), AMI_EXTENSION, call_id],
-            countdown=300 
-        )
-    else:
-        print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")
-        finalizar_y_reportar(call_id, call_data, "FAILED")
+        was_reported_by_11labs = call_record.get(last_attr, {}).get("failed_reason") is not None
+
+        if next_number:
+            print(f"[Beat] Reintentando {call_id} -> {next_attr}: {next_number}")
+            call_record[last_attr]["status"] = "FAILED"
+
+            if not was_reported_by_11labs:
+                call_record[last_attr]["failed_reason"] = "AST_ISSUE"
+
+            call_record["last_called"] = next_attr
+            call_record[next_attr] = {
+                "number": next_number,
+                "status": "DISPATCHED",
+                "failed_reason": None
+            }
+            call_data["status"] = "RETRYING"
+            call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
+            redis_client.set(s_key, "DISPATCHED", ex=86400)
+
+            disparar_llamada_ami.apply_async(
+                args=[next_number, call_data["alternative_phone"], call_data.get("alternative_phone_2"), AMI_EXTENSION, call_id],
+                countdown=300 
+            )
+        else:
+            print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")
+            finalizar_y_reportar(call_id, call_data, "FAILED")
+            
+

@@ -11,6 +11,7 @@ import redis
 import json
 import hmac
 import hashlib
+from datetime import datetime
 
 
 load_dotenv()
@@ -145,29 +146,74 @@ async def elevenlabs_post_call_webhook(request: Request):
     
     if event_type == "call_initiation_failure":
         print (f"Falla en inicio de llamada reportado desde el webhook :{data}")
+        
         return {"status": "received"}
     elif event_type == "post_call_audio":
-        print (f"Audio recibido post llamada :{data}")
+        conversation_id=data.get("conversation_id","No disponible")
+        print (f"Audio recibido post llamada conversacion :{conversation_id}")
+        audio_data =data.get("full_audio", "No disponible")
+
+        call_id = None
+        for key in redis_client.scan_iter("call_data:*"):
+            raw_redis_data = redis_client.get(key)
+            if raw_redis_data:
+                try:
+                    call_data = json.loads(raw_redis_data)
+                    call_record = call_data.get("call_record", {})
+                    last_called_attr = call_record.get("last_called", "phone")
+                    
+                    if last_called_attr in call_record:
+                        current_attr_data = call_record[last_called_attr]
+                        
+                        if "elevenlabs_analysis" in current_attr_data:
+                            stored_conversation_id = current_attr_data["elevenlabs_analysis"].get("conversation_id")
+                            
+                            if stored_conversation_id == conversation_id:
+                                call_id = key.split(":")[1]
+                                current_attr_data["elevenlabs_analysis"]["base64_audio"] = audio_data
+                                redis_client.set(key, json.dumps(call_data), ex=86400)
+                                print(f"✅ Audio base64 agregado al análisis para {conversation_id} (call_id: {call_id})")
+                                break
+                except json.JSONDecodeError:
+                    continue
+        
+        if not call_id:
+            print(f"⚠️ No se encontró call_id para conversation_id: {conversation_id}")
+        
         return {"status": "received"}
+    
+    
     elif event_type == "post_call_transcription":
         metadata = data.get("metadata", {})
-        phone_call = metadata.get("phone_call", {})
+        phone_call = data.get("user_id", {})
+        conversation_id=data.get("conversation_id", "")
         
         call_id = phone_call.get("call_sid") 
+        phone_number=phone_call.get("external_number")
         termination_reason = metadata.get("termination_reason") 
         
         if not call_id:
             print("🔴 Error: No se encontró call_sid en el payload")
             return {"status": "error", "message": "No call_sid found"}
-
+        
+        
         analysis_data = data.get("analysis", {})
+        is_success = analysis_data.get("call_successful","No dispible"),
+        print(f"Analisis de 11labs recibido: {analysis_data}")
+        conversation_initiation_client_data=analysis_data.get("conversation_initiation_client_data", "No Disponible")
+        dynamic_vars=conversation_initiation_client_data.get("dynamic_variables","No Disponible")
+        evaluation_result=analysis_data.get("evaluation_criteria_results_list", "No disponible"),
+        data_collection_results_list=analysis_data.get("data_collection_results_list", "No disponible")
+        transcript_summary= analysis_data.get("transcript_summary", "")
+        
         elevenlabs_analysis = {
-            "success": analysis_data.get("call_successful"), 
+            "success": is_success, 
             "termination_reason": termination_reason,        
-            "summary": analysis_data.get("transcript_summary", ""),
-            "evaluation_criteria": analysis_data.get("evaluation_criteria_results_list", ""),       
-            "data_collection": analysis_data.get("data_collection_results_list", ""),
-            "dynamic_vars": analysis_data.get("dynamic_variables", "")
+            "summary": transcript_summary,
+            "evaluation_criteria": evaluation_result,       
+            "data_collection": data_collection_results_list,
+            "dynamic_vars": dynamic_vars,
+            "conversation_id": conversation_id
         }
 
         raw_redis_data = redis_client.get(f"call_data:{call_id}")
@@ -184,9 +230,52 @@ async def elevenlabs_post_call_webhook(request: Request):
             
             redis_client.set(f"call_data:{call_id}", json.dumps(full_call_data), ex=86400)
             print(f"✅ Análisis guardado para {call_id} en el registro '{last_called_attr}'")
-
+            
+        if is_success=="success":
+            print (f"✅ Flujo de llamada exitosa, oferta ofrecida y respondida")
+            redis_client.set(f"call_status:{call_id}", "COMPLETED", ex=86400)
+        
+        elif is_success=="failure":
+            print (f"❌ Flujo de llamada fallido para {call_id} con numero : {phone_number}")
+            redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
         return {"status": "received"}
+    elif event_type == "call_initiation_failure":
+        reason=data.get("failure_reason","No disponible")
+        phone_called = data.get("user_id", "No disponible")
+        raw_data = redis_client.get(f"call_data:{call_id}")
+        if not raw_data:
+            return {"status": "error", "message": "Call not found in Redis"}
+        
+        call_data = json.loads(raw_data)
+        call_record = call_data.get("call_record", {})
+        
+        target_attr = None
+        for attr in ["phone", "alternative_phone", "alternative_phone_2"]:
+            if call_record.get(attr, {}).get("number") == phone_called:
+                target_attr = attr
+                break
+        
+        if target_attr:
+            was_already_failed = call_record[target_attr].get("status") == "FAILED"
 
+            call_record[target_attr]["status"] = "FAILED"
+            call_record[target_attr]["failed_reason"] = reason
+            
+            if not was_already_failed:
+                redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
+                print(f"[Webhook] call_initiation_failure: {phone_called} marcado como FAILED. Status global actualizado.")
+            else:
+                print(f"[Webhook] call_initiation_failure: {phone_called} ya estaba FAILED. Solo razón actualizada.")
+            
+            call_data["call_record"] = call_record
+            redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
+            
+            return {"status": "received"}
+        else:
+            print(f"⚠️ No se encontró el teléfono {phone_called} en call_record")
+            return {"status": "error", "message": "Teléfono no encontrado en registro"}
+        
+                              
 
 ##---------------------------------Tools de ElevenLabs ---------------------------------##
 @app.post("/webhooks/call-issue-detected")
@@ -231,7 +320,7 @@ async def notify_call_issue(
             "status": "FAILED",
             "failed_reason": reason
         }
-        redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
+        #redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
         print(f"[Webhook] IA reporta fallo primero para {phone_reported}. Marcando FAILED global.")
 
     call_data["call_record"] = call_record
@@ -253,7 +342,7 @@ async def tools_endpoint(
     print(f"🧰 Tool solicitada por agente: {payload}")
     
     tool_request=payload.get("tool")
-    params=payload.get("tool_params", {})
+    params=payload.get("params", {})
 
     if tool_request=="applyDecision":
         return await applyDecision(params)
