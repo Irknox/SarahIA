@@ -65,10 +65,7 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
         
         if existing_data:
             info = json.loads(existing_data)
-            info["status"] = "DISPATCHED"
-            info["last_called_number"] = user_phone
-            if context: info["context"] = context
-            if agent_instructions: info["agent_instructions"] = agent_instructions
+            info["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
             info = {
                 "status": "DISPATCHED",
@@ -110,7 +107,7 @@ def sync_call_status():
         call_id = s_key.split(":")[1]
         asterisk_status = redis_client.get(s_key)
         raw_data = redis_client.get(f"call_data:{call_id}")
-        if not raw_data: continue
+        if not raw_data: continue 
         
         call_data = json.loads(raw_data)     
         updated_at = datetime.strptime(call_data["updated_at"], "%Y-%m-%d %H:%M:%S")
@@ -119,8 +116,9 @@ def sync_call_status():
         if asterisk_status == "COMPLETED":       
             print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
             return finalizar_y_reportar(call_id, call_data, "COMPLETED")
-        elif timeout_reached:
+        elif timeout_reached and asterisk_status != "DISPATCHED":
             print(f"[Beat] {call_id}: Tiempo limite alcanzado, ultimo estado: {asterisk_status}.")
+            
             return finalizar_y_reportar(call_id, call_data, asterisk_status)
         elif asterisk_status in ["FAILED", "BUSY", "NOANSWER"]:
             print(f"[Beat] {call_id}: Fallo de red/técnico ({asterisk_status}).")

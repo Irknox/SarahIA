@@ -198,7 +198,7 @@ async def elevenlabs_post_call_webhook(request: Request):
         
         
         analysis_data = data.get("analysis", {})
-        is_success = analysis_data.get("call_successful","No dispible"),
+        is_success = analysis_data.get("call_successful", "No dispible")
         print(f"Analisis de 11labs recibido: {analysis_data}")
         conversation_initiation_client_data=analysis_data.get("conversation_initiation_client_data", "No Disponible")
         dynamic_vars=conversation_initiation_client_data.get("dynamic_variables","No Disponible")
@@ -207,7 +207,7 @@ async def elevenlabs_post_call_webhook(request: Request):
         transcript_summary= analysis_data.get("transcript_summary", "")
         
         elevenlabs_analysis = {
-            "success": is_success, 
+            "was_success": is_success, 
             "termination_reason": termination_reason,        
             "summary": transcript_summary,
             "evaluation_criteria": evaluation_result,       
@@ -239,6 +239,8 @@ async def elevenlabs_post_call_webhook(request: Request):
             print (f"❌ Flujo de llamada fallido para {call_id} con numero : {phone_number}")
             redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
         return {"status": "received"}
+    
+    
     elif event_type == "call_initiation_failure":
         reason=data.get("failure_reason","No disponible")
         phone_called = data.get("user_id", "No disponible")

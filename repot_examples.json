@@ -1,0 +1,34 @@
+{
+  "call_id": "550e8400-e29b-41d4-a716-446655440000",
+  "phone": "+34600000001",
+  "alternative_phone": "+34600000002",
+  "alternative_phone_2": "",
+  "status": "FAILED",
+  "last_udpated_at": "2026-02-27 18:30:00",
+  "call_context": {
+    "worker_name": "Juan Pérez",
+    "position": "Operario de Almacén",
+    "shift_date": "2026-03-01",
+    "confirmation": "Confirmado"
+  },
+  "call_record": {
+    "last_called": "alternative_phone",
+    "phone": {
+      "number": "+34600000001",
+      "status": "FAILED",
+      "failed_reason": "AST_ISSUE"
+    },
+    "alternative_phone": {
+      "number": "+34600000002",
+      "status": "FAILED",
+      "failed_reason": "IA detectó buzón de voz",
+      "elevenlabs_analysis": {
+        "was_success": "failure",
+        "termination_reason": "webhook_detected_voicemail",
+        "summary": "La llamada fue atendida por un contestador automático.",
+        "conversation_id": "conv-abc-123",
+        "base64_audio": "UklGRu..."
+      }
+    }
+  }
+}
