@@ -124,12 +124,34 @@ def sync_call_status():
             print(f"[Beat] {call_id}: Fallo de red/técnico ({asterisk_status}).")
             preparar_reintento_o_fallo(call_id, call_data, s_key)
 
-def finalizar_y_reportar(call_id, call_data, final_status):
+@celery_app.task(bind=True, max_retries=10, default_retry_delay=30)
+def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
+    raw_data = redis_client.get(f"call_data:{call_id}")
+    if not raw_data: return
+    
+    call_data = json.loads(raw_data)
+    record = call_data.get("call_record", {})
+    last = record.get("last_called")
+    
+
+    needs_audio = False
+    if last in record and "elevenlabs_analysis" in record[last]:
+        needs_audio = True
+        
+    has_audio = False
+    if needs_audio and record[last]["elevenlabs_analysis"].get("base64_audio"):
+        has_audio = True
+
+    if needs_audio and not has_audio and final_status != "FAILED":
+        print(f"⏳ Postergando reporte para {call_id}: Esperando audio...")
+        raise self.retry(countdown=30)
+
     call_data["status"] = final_status
     call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
+    
+    send_call_report(call_id, call_data) #
+    redis_client.delete(f"call_data:{call_id}")
     redis_client.delete(f"call_status:{call_id}")
-    return send_call_report(call_id, call_data)
 
 def preparar_reintento_o_fallo(call_id, call_data, s_key):
         call_record = call_data["call_record"]
