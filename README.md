@@ -1,5 +1,15 @@
 # SarahIA — Sistema de Confirmación de Turnos por IA
 
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-5+-37814A?style=flat-square&logo=celery&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/Nginx-gateway-009639?style=flat-square&logo=nginx&logoColor=white)
+![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Voice_AI-000000?style=flat-square&logoColor=white)
+![Asterisk](https://img.shields.io/badge/Asterisk-PJSIP-F47C20?style=flat-square&logoColor=white)
+
 SarahIA es un sistema de llamadas salientes automáticas que confirma turnos laborales con trabajadores usando un agente de voz basado en ElevenLabs y telefonía Asterisk (PJSIP).
 
 ---
@@ -69,7 +79,6 @@ El sistema externo (SchedulerAgent) envía un `POST /calls/add` con el contexto 
 
 El Backend API:
 - Parsea la fecha/hora con zona horaria `Europe/Madrid`
-- Persiste el registro en `db.json`
 - Encola la tarea `disparar_llamada_ami` en Celery con ETA a la hora programada
 
 ---
