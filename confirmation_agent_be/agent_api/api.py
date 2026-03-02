@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Body, HTTPException, Header, Request
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from utils import get_call_context
+from utils import get_call_context, send_call_report
 from typing import Dict, Any, Optional
 import redis
 import json
@@ -146,40 +146,42 @@ async def elevenlabs_post_call_webhook(request: Request):
     data = payload.get("data", {})
     
     if event_type == "call_initiation_failure":
-        reason=data.get("failure_reason","No disponible")
-        phone_called = data.get("user_id", "No disponible")
-        raw_data = redis_client.get(f"call_data:{call_id}")
-        if not raw_data:
-            return {"status": "error", "message": "Call not found in Redis"}
-        
-        call_data = json.loads(raw_data)
-        call_record = call_data.get("call_record", {})
-        
-        target_attr = None
-        for attr in ["phone", "alternative_phone", "alternative_phone_2"]:
-            if call_record.get(attr, {}).get("number") == phone_called:
-                target_attr = attr
-                break
-        
-        if target_attr:
-            was_already_failed = call_record[target_attr].get("status") == "FAILED"
+        failure_reason = data.get("failure_reason", "unknown")
+        phone_called = data.get("metadata", {}).get("body", {}).get("From")
 
-            call_record[target_attr]["status"] = "FAILED"
-            call_record[target_attr]["failed_reason"] = reason
-            
-            if not was_already_failed:
-                redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
-                print(f"[Webhook] call_initiation_failure: {phone_called} marcado como FAILED. Status global actualizado.")
-            else:
-                print(f"[Webhook] call_initiation_failure: {phone_called} ya estaba FAILED. Solo razón actualizada.")
-            
-            call_data["call_record"] = call_record
-            redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
-            
+        if not phone_called:
+            print(f"[Webhook] call_initiation_failure: No se encontró número en el payload")
+            return {"status": "error", "message": "No phone number in payload"}
+
+        call_id = None
+        call_data = None
+        for key in redis_client.scan_iter("call_data:*"):
+            raw = redis_client.get(key)
+            if not raw: continue
+            candidate = json.loads(raw)
+            record = candidate.get("call_record", {})
+            last = record.get("last_called", "phone")
+            if record.get(last, {}).get("number") == phone_called:
+                call_id = key.split(":")[1]
+                call_data = candidate
+                break
+
+        if not call_data:
+            print(f"[Webhook] call_initiation_failure: No se encontró llamada activa para {phone_called}")
             return {"status": "received"}
-        else:
-            print(f"⚠️ No se encontró el teléfono {phone_called} en call_record")
-            return {"status": "error", "message": "Teléfono no encontrado en registro"}
+
+        call_record = call_data.get("call_record", {})
+        target_attr = call_record.get("last_called")
+
+        call_record[target_attr]["status"] = "FAILED"
+        call_record[target_attr]["failed_reason"] = failure_reason
+        call_data["call_record"] = call_record
+
+        redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
+        redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
+        print(f"[Webhook] call_initiation_failure: {phone_called} marcado FAILED ({failure_reason}) para ID {call_id}")
+        send_call_report(call_id, call_data)
+        return {"status": "received"}
         
     elif event_type == "post_call_transcription":
         metadata = data.get("metadata", {})
@@ -213,6 +215,7 @@ async def elevenlabs_post_call_webhook(request: Request):
             "dynamic_vars": dynamic_vars,
             "conversation_id": conversation_id
         }
+        
         temp_audio = redis_client.get(f"temp_audio:{conversation_id}")
         if temp_audio:
             elevenlabs_analysis["base64_audio"] = temp_audio
@@ -236,10 +239,13 @@ async def elevenlabs_post_call_webhook(request: Request):
         if is_success=="success":
             print (f"✅ Flujo de llamada exitosa, oferta ofrecida y respondida")
             redis_client.set(f"call_status:{call_id}", "COMPLETED", ex=86400)
-        
+
         elif is_success=="failure":
             print (f"❌ Flujo de llamada fallido para {call_id} con numero : {phone_number}")
             redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
+
+        full_call_data["status"] = "COMPLETED" if is_success == "success" else "FAILED"
+        send_call_report(call_id, full_call_data)
         return {"status": "received"}
     
     elif event_type == "post_call_audio":
@@ -258,6 +264,7 @@ async def elevenlabs_post_call_webhook(request: Request):
                 if record[last]["elevenlabs_analysis"].get("conversation_id") == conversation_id:
                     record[last]["elevenlabs_analysis"]["base64_audio"] = audio_data
                     redis_client.set(key, json.dumps(call_data), ex=86400)
+                    send_call_report(key.split(":")[1], call_data)
                     found = True
                     break
         
@@ -315,7 +322,7 @@ async def notify_call_issue(
 
     call_data["call_record"] = call_record
     redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
-    
+    send_call_report(call_id, call_data)
     return {"status": "success"}
 
 

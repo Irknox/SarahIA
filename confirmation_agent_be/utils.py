@@ -88,4 +88,4 @@ def send_call_report(call_id, call_data):
         "call_record": call_data.get("call_record", {}),
         "last_udpated_at": call_data.get("updated_at", {}),
     }
-    print (f"Este es el reporte a enviar: {report_to_send}") 
+    print (f"📬 Este es el reporte a enviar: {report_to_send}") 

@@ -113,13 +113,16 @@ def sync_call_status():
         updated_at = datetime.strptime(call_data["updated_at"], "%Y-%m-%d %H:%M:%S")
         timeout_reached = datetime.now() > (updated_at + timedelta(minutes=5))
 
-        if asterisk_status == "COMPLETED":       
+        if asterisk_status == "COMPLETED":
             print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
-            return finalizar_y_reportar(call_id, call_data, "COMPLETED")
-        elif timeout_reached and asterisk_status != "DISPATCHED":
+            tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "COMPLETED"])
+            continue
+
+        elif timeout_reached and asterisk_status not in ["DISPATCHED", "IN_PROGRESS"]:
             print(f"[Beat] {call_id}: Tiempo limite alcanzado, ultimo estado: {asterisk_status}.")
-            
-            return finalizar_y_reportar(call_id, call_data, asterisk_status)
+            tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, asterisk_status])
+            continue
+
         elif asterisk_status in ["FAILED", "BUSY", "NOANSWER"]:
             print(f"[Beat] {call_id}: Fallo de red/técnico ({asterisk_status}).")
             preparar_reintento_o_fallo(call_id, call_data, s_key)
@@ -154,6 +157,12 @@ def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
     redis_client.delete(f"call_status:{call_id}")
 
 def preparar_reintento_o_fallo(call_id, call_data, s_key):
+        confirmation = call_data.get("context", {}).get("confirmation", "No confirmado")
+        if confirmation != "No confirmado":
+            print(f"[Beat] {call_id}: Herramienta usada (confirmation='{confirmation}'). Finalizando sin reintento.")
+            tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "FAILED"])
+            return
+
         call_record = call_data["call_record"]
         last_attr = call_record["last_called"]
         
@@ -186,6 +195,7 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             
             redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
             redis_client.set(s_key, "DISPATCHED", ex=86400)
+            send_call_report(call_id, call_data)
 
             disparar_llamada_ami.apply_async(
                 args=[next_number, call_data["alternative_phone"], call_data.get("alternative_phone_2"), AMI_EXTENSION, call_id],
@@ -193,6 +203,6 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             )
         else:
             print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")
-            finalizar_y_reportar(call_id, call_data, "FAILED")
+            tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "FAILED"])
             
 

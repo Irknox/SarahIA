@@ -8,6 +8,9 @@ __pycache__/
 node_modules/
 npm-debug.log*
 
+pjsip.extensions_custom
+*pjsip.extensions_custom
+
 .env
 
 backend/db.json

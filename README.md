@@ -2,8 +2,6 @@
 
 SarahIA es un sistema de llamadas salientes automáticas que confirma turnos laborales con trabajadores usando un agente de voz basado en ElevenLabs y telefonía Asterisk (PJSIP).
 
-> **Nota:** El frontend (`confirmation_agent_fe`) es un prototipo inicial y actualmente **no está en uso**. El sistema opera íntegramente a través de las APIs del backend.
-
 ---
 
 ## Arquitectura General
