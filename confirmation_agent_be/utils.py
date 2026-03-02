@@ -77,15 +77,15 @@ def get_call_context(phone: str, id_call: int):
             
     return {}
 
-def send_call_report(call_id, call_data):    
+def send_call_report(call_id, call_data):
     report_to_send={
         "call_id": call_id,
-        "phone": call_data.get("user_phone", {}),
-        "alternative_phone": call_data.get("alternative_phone", {}),
-        "alternative_phone_2": call_data.get("alternative_phone_2", {}),
+        "phone": call_data.get("phone"),
+        "alternative_phone": call_data.get("alternative_phone"),
+        "alternative_phone_2": call_data.get("alternative_phone_2"),
         "call_context": call_data.get("context", {}),
-        "status": call_data.get("status", {}),
+        "status": call_data.get("status"),
         "call_record": call_data.get("call_record", {}),
-        "last_udpated_at": call_data.get("updated_at", {}),
+        "last_updated_at": call_data.get("updated_at"),
     }
-    print (f"📬 Este es el reporte a enviar: {report_to_send}") 
+    print(f"📬 Este es el reporte a enviar: {json.dumps(report_to_send, indent=2, ensure_ascii=False)}") 
