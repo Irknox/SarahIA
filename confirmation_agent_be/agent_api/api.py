@@ -198,13 +198,13 @@ async def elevenlabs_post_call_webhook(request: Request):
         
         
         analysis_data = data.get("analysis", {})
-        is_success = analysis_data.get("call_successful", "No dispible")
+        is_success = analysis_data.get("call_successful", "No disponible")
         print(f"Analisis de 11labs recibido: {analysis_data}")
-        conversation_initiation_client_data=analysis_data.get("conversation_initiation_client_data", "No Disponible")
-        dynamic_vars=conversation_initiation_client_data.get("dynamic_variables","No Disponible")
-        evaluation_result=analysis_data.get("evaluation_criteria_results_list", "No disponible"),
-        data_collection_results_list=analysis_data.get("data_collection_results_list", "No disponible")
-        transcript_summary= analysis_data.get("transcript_summary", "")
+        conversation_initiation_client_data = data.get("conversation_initiation_client_data", {})
+        dynamic_vars = conversation_initiation_client_data.get("dynamic_variables", {})
+        evaluation_result = analysis_data.get("evaluation_criteria_results_list", [])
+        data_collection_results_list = analysis_data.get("data_collection_results_list", [])
+        transcript_summary = analysis_data.get("transcript_summary", "")
         
         elevenlabs_analysis = {
             "was_success": is_success, 
