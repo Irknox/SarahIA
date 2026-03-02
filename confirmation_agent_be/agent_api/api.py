@@ -185,11 +185,11 @@ async def elevenlabs_post_call_webhook(request: Request):
         
     elif event_type == "post_call_transcription":
         metadata = data.get("metadata", {})
-        phone_call = data.get("phone_call", {})
+        phone_call = metadata.get("phone_call", {})
         conversation_id=data.get("conversation_id", "")
-        
-        call_id = phone_call.get("call_sid") 
-        phone_number=data.get("user_id")
+
+        call_id = phone_call.get("call_sid")
+        phone_number = phone_call.get("external_number")
         termination_reason = metadata.get("termination_reason") 
         
         if not call_id:

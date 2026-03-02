@@ -273,16 +273,17 @@ ELEVENLABS_WEBHOOK_SIGNATURE=<elevenlabs_hmac_secret>
 
 ## Dialplan Asterisk
 
-El archivo `/etc/asterisk/pjsip.extensions_custom.conf` contiene la configuración del dialplan y debe copiarse/incluirse manualmente en la instalación de Asterisk junto a los endpoints y otros archivos necesarios para el protocolo SIP. **No se versionan en Git** por contener credenciales de Redis y datos del entorno.
+El archivo `AMI/pjsip.extensions_custom.conf.example` contiene un ejemplo del dialplan. Cópialo a `/etc/asterisk/pjsip.extensions_custom.conf` en tu instalación de Asterisk, rellena los `<PLACEHOLDER>` con los valores de tu entorno y añádelo a la configuración de Asterisk junto a los endpoints PJSIP necesarios.
 
-| Extensión | Descripción |
+El archivo real (`pjsip.extensions_custom.conf`) no se versiona en Git por contener credenciales.
+
+| Extensión / Contexto | Descripción |
 |-----------|-------------|
-| `7777` | Flujo principal: dial al humano + AMD + conexión a ElevenLabs |
-| `9998` | Agente SarahIA en ElevenLabs (producción) |
-| `9090` | Agente SarahIA alternativo |
-| `9997` | Agente ElevenLabs de test |
-| `8000` | Agente OpenAI SIP |
-| `90000` | Escalado a PBX de producción |
+| `bridge-outbound` | Punto de entrada desde el AMI Bridge (`AMI_TRANSFER_CONTEXT`) |
+| `7777` | Flujo principal: dial al trabajador + AMD + conexión a ElevenLabs |
+| `sub-validar-voz` | Subrutina AMD: detecta humano vs contestadora, actualiza Redis |
+| `handler-finalizar` | Mapea `DIALSTATUS` al estado final en Redis |
+| `add-elevenlabs-headers` | Inyecta `X-Call-ID` y `X-Caller-ID` en los headers SIP del INVITE |
 
 ---
 

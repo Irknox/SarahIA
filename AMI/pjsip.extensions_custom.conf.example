@@ -1,0 +1,78 @@
+; ============================================================
+; pjsip.extensions_custom.conf — Ejemplo para SarahIA
+;
+; Copia este archivo a /etc/asterisk/pjsip.extensions_custom.conf
+; y reemplaza los valores <PLACEHOLDER> con los de tu entorno.
+;
+; Requiere que en pjsip.conf estén definidos:
+;   - el endpoint <ELEVENLABS_PJSIP_ENDPOINT> apuntando a ElevenLabs
+;   - el trunk ext-remote para las llamadas salientes al trabajador
+; ============================================================
+
+; Punto de entrada desde el AMI Bridge (AMI_TRANSFER_CONTEXT=bridge-outbound)
+[bridge-outbound]
+exten => s,1,NoOp(Iniciando flujo hacia Sarah para llamada ID: ${X_CALL_ID})
+ same => n,Goto(from-internal-custom,7777,1)
+
+[from-internal-custom]
+
+; --- Extensión principal: dial al trabajador + AMD + conexión a ElevenLabs ---
+exten => 7777,1,NoOp(Iniciando flujo: Humano=${DESTINO_HUMANO} ID=${X_CALL_ID})
+ same => n,Set(__ID_LLAMADA=${X_CALL_ID})
+ same => n,Set(__NUM_HUMANO=${DESTINO_HUMANO})
+ same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_status:${ID_LLAMADA}" 3600 "DISPATCHED")
+
+ same => n,Dial(PJSIP/${NUM_HUMANO}@ext-remote,60,U(sub-validar-voz^${ID_LLAMADA}^${NUM_HUMANO})G(from-internal-custom^7777^10))
+
+ same => n(maestro),10,NoOp(Canal maestro detectado, verificando AMD...)
+ same => n,GotoIf($["${ES_HUMANO}"="1"]?conectar_eleven:finalizar)
+
+ same => n(humano),20,NoOp(Humano en linea, esperando a Sarah...)
+ same => n,Wait(300)
+ same => n,Hangup()
+
+ same => n(conectar_eleven),NoOp(Llamando a ElevenLabs para unirlo al humano...)
+ same => n,Dial(PJSIP/<ELEVENLABS_PJSIP_ENDPOINT>/sip:<ELEVENLABS_AGENT_SIP_URI>,300,b(add-elevenlabs-headers^s^1(${ID_LLAMADA},${NUM_HUMANO})))
+
+ same => n,Hangup()
+
+ same => n(finalizar),Gosub(handler-finalizar,s,1(${ID_LLAMADA}))
+ same => n,Hangup()
+
+
+; --- Subrutina AMD: detecta humano vs contestadora ---
+[sub-validar-voz]
+exten => s,1,NoOp(Validando ID: ${ARG1})
+ same => n,AMD()
+ same => n,NoOp(Resultado AMD: ${AMDSTATUS})
+
+ same => n,GotoIf($["${AMDSTATUS}"="HUMAN"]?es_humano:es_maquina)
+
+ same => n(es_humano),NoOp(Humano detectado)
+ same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_status:${ARG1}" 3600 "IN_PROGRESS")
+ same => n,Set(ES_HUMANO=1,g)
+ same => n,Return()
+
+ same => n(es_maquina),NoOp(Buzon detectado)
+ same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_status:${ARG1}" 3600 "NOANSWER")
+ same => n,Set(ES_HUMANO=0,g)
+ same => n,Set(GOSUB_RESULT=CONGESTION)
+ same => n,Return()
+
+
+; --- Handler de cierre: mapea DIALSTATUS a estado Redis ---
+[handler-finalizar]
+exten => s,1,NoOp(Finalizando llamada ID: ${ARG1})
+ same => n,Set(ESTADO_DIAL=${DIALSTATUS})
+ same => n,Set(NUEVO_STATUS=${IF($["${ESTADO_DIAL}"="ANSWER"]?COMPLETED:${IF($["${ESTADO_DIAL}"="BUSY"]?BUSY:${IF($["${ESTADO_DIAL}"="NOANSWER"]?NOANSWER:FAILED)})})})
+ same => n,ExecIf($["${HANGUPCAUSE}"="16"]?Set(NUEVO_STATUS=COMPLETED))
+ same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_status:${ARG1}" 3600 "${NUEVO_STATUS}")
+ same => n,Return()
+
+
+; --- Headers SIP para ElevenLabs ---
+[add-elevenlabs-headers]
+exten => s,1,NoOp(Headers ElevenLabs para ID: ${ARG1})
+ same => n,Set(PJSIP_HEADER(add,X-Call-ID)=${ARG1})
+ same => n,Set(PJSIP_HEADER(add,X-Caller-ID)=${ARG2})
+ same => n,Return()
