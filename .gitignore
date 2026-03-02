@@ -18,5 +18,6 @@ celerybeat-schedule
 .docker/
 
 CLAUDE.md
+*CLAUDE.md
 
 confirmation_agent_fe/

@@ -78,19 +78,19 @@ services:
     depends_on:
       - redis
 
-  sarahai-frontend:
-    build:
-      context: ./confirmation_agent_fe
-      args:
-        - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
-    container_name: sarahai-frontend
-    restart: always
-    network_mode: "host"
-    environment:
-      - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
-      - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
-      - JWT_SECRET=${JWT_SECRET}
-      - ACCESS_KEY=${ACCESS_KEY}
+  # sarahai-frontend: (frontend no incluido en este repositorio)
+  #   build:
+  #     context: ./confirmation_agent_fe
+  #     args:
+  #       - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
+  #   container_name: sarahai-frontend
+  #   restart: always
+  #   network_mode: "host"
+  #   environment:
+  #     - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
+  #     - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - ACCESS_KEY=${ACCESS_KEY}
 
   agent-api:
     build: ./confirmation_agent_be
@@ -120,8 +120,8 @@ services:
       - "7373:7373"
       - "7001:7001"
     depends_on:
-      sarahai-frontend:
-        condition: service_started
+      # sarahai-frontend:  # frontend no incluido en este repositorio
+      #   condition: service_started
       backend-api:
         condition: service_started
       ami:
