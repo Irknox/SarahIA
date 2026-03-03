@@ -144,8 +144,10 @@ async def elevenlabs_post_call_webhook(request: Request):
 
     event_type = payload.get("type")
     data = payload.get("data", {})
+    print(f"📥 Webhook post-call recibido: tipo={event_type}")
     
     if event_type == "call_initiation_failure":
+        print (f"❌ Webhook de error al iniciar llamada recibido: {payload}")
         failure_reason = data.get("failure_reason", "unknown")
         phone_called = data.get("metadata", {}).get("body", {}).get("From")
 
@@ -251,25 +253,37 @@ async def elevenlabs_post_call_webhook(request: Request):
     elif event_type == "post_call_audio":
         conversation_id = data.get("conversation_id")
         audio_data = data.get("full_audio")
+        audio_len = len(audio_data) if audio_data else 0
+        print(f"🔉 Webhook de audio recibido — conversation_id={conversation_id}, base64_chars={audio_len}")
+
+        if not conversation_id or not audio_data:
+            print("🔴 post_call_audio: faltan campos conversation_id o full_audio")
+            return {"status": "error", "message": "Missing conversation_id or full_audio"}
 
         found = False
         for key in redis_client.scan_iter("call_data:*"):
             raw_data = redis_client.get(key)
-            if not raw_data: continue
+            if not raw_data:
+                continue
             call_data = json.loads(raw_data)
             record = call_data.get("call_record", {})
             last = record.get("last_called", "phone")
-            
+
             if last in record and "elevenlabs_analysis" in record[last]:
-                if record[last]["elevenlabs_analysis"].get("conversation_id") == conversation_id:
+                stored_conv_id = record[last]["elevenlabs_analysis"].get("conversation_id")
+                if stored_conv_id == conversation_id:
                     record[last]["elevenlabs_analysis"]["base64_audio"] = audio_data
                     redis_client.set(key, json.dumps(call_data), ex=86400)
+                    print(f"✅ Audio guardado en Redis para call_id={key.split(':')[1]}, conversation_id={conversation_id}")
                     send_call_report(key.split(":")[1], call_data)
                     found = True
                     break
-        
+
         if not found:
+            print(f"⚠️ Audio recibido pero transcripción aún no procesada — guardando en temp_audio:{conversation_id}")
             redis_client.set(f"temp_audio:{conversation_id}", audio_data, ex=600)
+
+        return {"status": "received"}
       
         
                               

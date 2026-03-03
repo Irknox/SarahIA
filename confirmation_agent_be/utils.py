@@ -78,7 +78,7 @@ def get_call_context(phone: str, id_call: int):
     return {}
 
 def send_call_report(call_id, call_data):
-    report_to_send={
+    report_to_send = {
         "call_id": call_id,
         "phone": call_data.get("phone"),
         "alternative_phone": call_data.get("alternative_phone"),
@@ -88,4 +88,17 @@ def send_call_report(call_id, call_data):
         "call_record": call_data.get("call_record", {}),
         "last_updated_at": call_data.get("updated_at"),
     }
-    print(f"📬 Este es el reporte a enviar: {json.dumps(report_to_send, indent=2, ensure_ascii=False)}") 
+
+    # Copia del reporte para el log, sin el base64 del audio (puede ser muy largo)
+    log_report = json.loads(json.dumps(report_to_send))
+    has_audio = False
+    for phone_key in ["phone", "alternative_phone", "alternative_phone_2"]:
+        entry = log_report.get("call_record", {}).get(phone_key, {})
+        analysis = entry.get("elevenlabs_analysis", {})
+        if "base64_audio" in analysis:
+            audio_len = len(report_to_send["call_record"][phone_key]["elevenlabs_analysis"]["base64_audio"])
+            analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
+            has_audio = True
+
+    print(f"📬 Reporte a enviar (call_id={call_id}, status={report_to_send['status']}, audio={'si' if has_audio else 'no'}):")
+    print(json.dumps(log_report, indent=2, ensure_ascii=False)) 
