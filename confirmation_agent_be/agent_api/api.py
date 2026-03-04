@@ -144,6 +144,8 @@ async def elevenlabs_post_call_webhook(request: Request):
 
     event_type = payload.get("type")
     data = payload.get("data", {})
+    print(f"❌ Webhook post-call recibido: tipo={payload}")
+    
     print(f"📥 Webhook post-call recibido: tipo={event_type}")
     
     if event_type == "call_initiation_failure":
