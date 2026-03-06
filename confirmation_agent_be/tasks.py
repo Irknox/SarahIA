@@ -3,7 +3,7 @@ import requests
 from celery import Celery
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from utils import leer_db, guardar_db, send_call_report
+from utils import leer_db, guardar_db, send_partial_call_report, send_final_call_report
 import redis
 import json
 
@@ -129,32 +129,52 @@ def sync_call_status():
 
 @celery_app.task(bind=True, max_retries=10, default_retry_delay=30)
 def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
+    """Envia el reporte FINAL con contexto completo pero solo el registro del ultimo numero."""
     raw_data = redis_client.get(f"call_data:{call_id}")
     if not raw_data: return
-    
+
     call_data = json.loads(raw_data)
     record = call_data.get("call_record", {})
     last = record.get("last_called")
-    
 
     needs_audio = False
     if last in record and "elevenlabs_analysis" in record[last]:
         needs_audio = True
-        
+
     has_audio = False
     if needs_audio and record[last]["elevenlabs_analysis"].get("base64_audio"):
         has_audio = True
 
-    if needs_audio and not has_audio and final_status != "FAILED":
-        print(f"⏳ Postergando reporte para {call_id}: Esperando audio...")
+    if needs_audio and not has_audio:
+        print(f"[Final] Postergando reporte para {call_id}: Esperando audio...")
         raise self.retry(countdown=30)
 
     call_data["status"] = final_status
     call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    send_call_report(call_id, call_data) #
+
+    send_final_call_report(call_id, call_data)
     redis_client.delete(f"call_data:{call_id}")
     redis_client.delete(f"call_status:{call_id}")
+
+
+@celery_app.task(bind=True, max_retries=10, default_retry_delay=30)
+def tarea_enviar_reporte_parcial(self, call_id, phone_attr):
+    """Envia reporte parcial de un numero que fallo. Espera audio si 11labs conecto."""
+    raw_data = redis_client.get(f"call_data:{call_id}")
+    if not raw_data: return
+
+    call_data = json.loads(raw_data)
+    record = call_data.get("call_record", {})
+    phone_record = record.get(phone_attr, {})
+
+    has_analysis = "elevenlabs_analysis" in phone_record
+    has_audio = has_analysis and phone_record["elevenlabs_analysis"].get("base64_audio")
+
+    if has_analysis and not has_audio:
+        print(f"[Parcial] Postergando reporte parcial para {call_id}/{phone_attr}: Esperando audio...")
+        raise self.retry(countdown=30)
+
+    send_partial_call_report(call_id, phone_record)
 
 def preparar_reintento_o_fallo(call_id, call_data, s_key):
         confirmation = call_data.get("context", {}).get("confirmation", "No confirmado")
@@ -192,14 +212,19 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             }
             call_data["status"] = "RETRYING"
             call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
+
             redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
             redis_client.set(s_key, "DISPATCHED", ex=86400)
-            send_call_report(call_id, call_data)
+
+            has_analysis = "elevenlabs_analysis" in call_record.get(last_attr, {})
+            if has_analysis:
+                tarea_enviar_reporte_parcial.apply_async(args=[call_id, last_attr])
+            else:
+                send_partial_call_report(call_id, call_record[last_attr])
 
             disparar_llamada_ami.apply_async(
                 args=[next_number, call_data["alternative_phone"], call_data.get("alternative_phone_2"), AMI_EXTENSION, call_id],
-                countdown=300 
+                countdown=300
             )
         else:
             print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")

@@ -1,254 +1,208 @@
 ================================================================================
- DOCUMENTACIÓN DEL REPORTE DE LLAMADA — SarahIA
- Para uso del desarrollador Frontend
+ DOCUMENTACION DEL REPORTE DE LLAMADA — SarahIA
 ================================================================================
 
-El backend envía este JSON al frontend cada vez que hay una actualización
-significativa del estado de la llamada. Se envía como mínimo dos veces:
-  1. Cuando finaliza la conversación (post_call_transcription).
-  2. Cuando llega el audio (post_call_audio) — incluye "base64_audio".
+El backend envia DOS tipos de reporte:
+  1. PARCIAL — Cada vez que un numero falla. Solo info de ese intento fallido.
+  2. FINAL  — Al terminar el ciclo (exito o sin mas numeros). Incluye contexto
+              del turno pero SOLO el registro del ultimo numero intentado(Con el que dio falla o exito).
 
-El frontend debe sobrescribir el estado anterior usando "call_id" como clave.
+Se debe usar "call_id" + "type" como clave para procesar cada reporte.
 
---------------------------------------------------------------------------------
- ESTRUCTURA COMPLETA ANOTADA
---------------------------------------------------------------------------------
+================================================================================
+ REPORTE PARCIAL (type: "partial")
+================================================================================
+
+Se envia cada vez que un numero falla (Asterisk o ElevenLabs).
+Incluye solo la info del intento fallido.
 
 {
   "call_id": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
-  //ID de llamada
+  // ID unico de la llamada.
 
-  "phone": "62587119",
-  //  Número de teléfono principal del trabajador.
-  //  Tipo   : string | null
+  "type": "partial",
+  // Siempre "partial" para reportes de fallo individual.
 
-  "alternative_phone": "87351686",
-  //  Primer número alternativo de contacto.
-  //  Tipo   : string | null | "" (cadena vacía si no fue configurado)
+  "phone_record": {
+  // Registro del numero que acaba de fallar.
 
-  "alternative_phone_2": "",
-  //  Segundo número alternativo de contacto.
-  //  Tipo   : string | null | "" (cadena vacía si no fue configurado)
+    "number": "+34600000001",
+    // Numero que se marco.
 
-  "call_context": {
-  //  Contexto del turno que se intentó confirmar. (Mismo recibido para agendar + la confirmacion del turno)
+    "status": "FAILED",
+    // Estado de este intento.
+    // Valores: "FAILED" | "BUSY" | "NOANSWER" | "AST_FAILED"
 
-    "confirmation": "Turno confirmado"
-    //  Decisión verbal registrada por el agente de IA durante la conversación.
-    //  La escribe el agente usando la herramienta "applyDecision".
-    //  Tipo   : string | null
-    //  Valores posibles:
-    //    "Turno confirmado"   → El trabajador aceptó el turno.
-    //    "Turno rechazado"    → El trabajador rechazó el turno.
-    //    "No confirmado"      → La llamada no llegó a registrar decisión
-    //                          (ej: contestadora, colgó antes de responder).
-  },
+    "failed_reason": "AST_ISSUE",
+    // Motivo del fallo.
+    // Ejemplos: "AST_ISSUE", "IA detecto buzon de voz", "voicemail_detected",
+    //           "no_answer", "busy", "call_failed", un failure_reason de 11labs.
+    // null si no se determino la razon.
+
+    "elevenlabs_analysis": {
+    // Solo presente si la llamada llego a conectar con ElevenLabs.
+    // Ausente en fallos de Asterisk (AST_FAILED, BUSY, NOANSWER sin agente).
+
+      "was_success": "failure",
+      // Resultado segun ElevenLabs. En parciales siempre sera "failure".
+
+      "termination_reason": "webhook_detected_voicemail",
+      // Motivo tecnico de terminacion de la sesion en ElevenLabs.
+
+      "summary": "La llamada fue atendida por un contestador automatico.",
+      // Resumen en texto libre generado por el LLM.
+
+      "evaluation_criteria": [
+      // Criterios de evaluacion configurados en ElevenLabs.
+        {
+          "criteria_id": "call_evaluation",
+          "result": "failure",
+          // "success" | "failure" | "unknown"
+          "rationale": "El agente no pudo completar la conversacion..."
+        }
+      ],
+
+      "data_collection": [
+      // Datos recopilados durante la conversacion.
+        {
+          "data_collection_id": "something_happened",
+          "value": null,
+          // string | null — null si no aplico.
+          "rationale": "No se recopilo informacion relevante."
+        }
+      ],
+
+      "dynamic_vars": {
+      // Variables del sistema de ElevenLabs al cierre.
+        "system__call_sid": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+        "system__conversation_id": "conv_abc123",
+        "system__call_duration_secs": 12,
+        "system__caller_id": "+34600000001",
+        "system__called_number": "3232",
+        "system__agent_id": "agent_xyz",
+        "system__time_utc": "2026-03-02T23:38:04.880372+00:00",
+        "system__timezone": "Europe/Madrid"
+      },
+
+      "conversation_id": "conv_abc123",
+      // ID de la conversacion en ElevenLabs.
+
+      "base64_audio": "<string base64 MP3>"
+      // Audio completo en base64 (MP3).
+      // Puede ser null si el audio no llego a tiempo tras reintentos.
+    }
+  }
+}
+
+
+================================================================================
+ REPORTE FINAL (type: "final")
+================================================================================
+
+Se envia una sola vez al terminar el ciclo: la llamada fue exitosa
+o se agotaron todos los numeros disponibles.
+Incluye contexto del turno pero SOLO el registro del ultimo numero.
+Los fallos anteriores ya fueron reportados como parciales.
+
+{
+  "call_id": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+  // ID unico de la llamada.
+
+  "type": "final",
+  // Siempre "final" para el reporte de cierre.
 
   "status": "COMPLETED",
-  //  Estado global del CICLO COMPLETO de llamada (todos los intentos).
-  //  Tipo   : string
-  //  Valores posibles:
-  //    "DISPATCHED"   → Llamada enviada a Asterisk, esperando respuesta.
-  //    "IN_PROGRESS"  → El teléfono fue respondido por un humano,
-  //                     conversación activa con el agente.
-  //    "COMPLETED"    → Ciclo finalizado con éxito (agente completó la conv.)
-  //    "FAILED"       → Todos los intentos fallaron (no se contactó al trabajador)
-  //    "RETRYING"     → Falló en el número actual, esperando para intentar
-  //                     con el siguiente número alternativo.
-  //  Uso FE: mostrar badge / color de estado principal del registro.
+  // Estado global del ciclo completo.
+  // Valores:
+  //   "COMPLETED" — Llamada exitosa, agente completo la conversacion.
+  //   "FAILED"    — Todos los intentos fallaron.
+
+  "call_context": {
+  // Contexto del turno que se intento confirmar.
+    "worker_first_name": "Elena",
+    "worker_name": "Elena Garcia Lopez",
+    "position": "Camarera",
+    "work_center": "Hotel Miramar",
+    "address": "Calle Gran Via 45, Madrid",
+    "shift_date": "2026-03-06",
+    "shift_start_time": "08:00",
+    "shift_end_time": "16:00",
+    "instructions": "Presentarse en recepcion",
+    "hourly_rate": "12.50",
+    "confirmation": "Turno confirmado"
+    // Decision verbal registrada por el agente.
+    // Valores: "Turno confirmado" | "Turno rechazado" | "No confirmado"
+  },
 
   "call_record": {
-  //  Registro detallado de cada número de teléfono intentado durante el ciclo.
-  //  Siempre existe la entrada "phone". Las entradas "alternative_phone" y
-  //  "alternative_phone_2" solo aparecen si esos números fueron intentados.
+  // Solo contiene el registro del ULTIMO numero intentado.
+  // Los anteriores ya fueron enviados como reportes parciales.
 
-    "last_called": "phone",
-    //  Indica cuál fue el último número marcado en este ciclo.
-    //  Tipo   : string
-    //  Valores: "phone" | "alternative_phone" | "alternative_phone_2"
+    "alternative_phone": {
+    // Registro del ultimo intento. La clave coincide con "last_called".
 
-    "phone": {
-    //  Resultado del intento con el número principal.
-    //  Si se intentaron alternativos, también aparecen con la misma estructura.
+      "number": "+34600000002",
+      // Numero marcado.
 
-      "number": "62587119",
-      //  El número de teléfono marcado en este intento.
-      //  Tipo: string
-
-      "status": "DISPATCHED",
-      //  Estado de ESTE intento específico (no el global).
-      //  Tipo   : string
-      //  Valores posibles:
-      //    "DISPATCHED"  → Marcado, Asterisk aún sin confirmar estado.
-      //    "IN_PROGRESS" → Respondido por humano, conversación activa.
-      //    "COMPLETED"   → Conversación completada (humano respondió y habló).
-      //    "FAILED"      → No se pudo completar (error, contestadora, etc.)
-      //    "BUSY"        → Línea ocupada.
-      //    "NOANSWER"    → No respondió / contestadora detectada por AMD.
-      //    "AST_ISSUE"   → Error de asterisk, no llego a Elevenlabs.
-      //  NOTA: Este campo refleja el estado de la llamada especificamente.
-      //        El resultado real de la conversación está en elevenlabs_analysis.
+      "status": "COMPLETED",
+      // Estado de este intento.
+      // Valores: "COMPLETED" | "FAILED"
 
       "failed_reason": null,
-      //  Motivo del fallo si este intento no tuvo éxito.
-      //  Tipo   : string | null
-      //  Ejemplos: "voicemail_detected", "no_answer", "busy", "call_failed"
-      //  null si el intento fue exitoso o está en curso.
+      // null si fue exitoso. String con motivo si fallo.
 
       "elevenlabs_analysis": {
-      //  Análisis completo de la conversación generado por ElevenLabs.
-      //  Solo presente si hubo conversación real (un humano respondió la llamada).
-      //  Ausente si el número no fue contestado o fue contestadora.
+      // Analisis de ElevenLabs. Presente si hubo conversacion con el agente.
+      // Misma estructura que en el reporte parcial.
 
         "was_success": "success",
-        //  Resultado de la conversación según el criterio de evaluación del agente.
-        //  Tipo   : string
-        //  Valores:
-        //    "success"  → El agente completó el objetivo (trabajador respondió
-        //                 a la oferta de turno, sea confirmando o rechazando).
-        //    "failure"  → El agente no pudo completar el objetivo
-        //                 (se colgó, no hubo audio, contestadora no detectada).
+        // "success" | "failure"
 
         "termination_reason": "Client disconnected: 1000",
-        //  Motivo técnico por el que terminó la sesión WebSocket/SIP de ElevenLabs.
-        //  Tipo   : string | null
-        //  Valor habitual: "Client disconnected: 1000" (cuelgue normal del teléfono).
-        //  Uso FE: referencia para debugging, no suele mostrarse al usuario final.
+        // Motivo tecnico de terminacion.
 
         "summary": "Sarah de Eurofirms llama a Elena para confirmar...",
-        //  Resumen en texto libre de la conversación, generado por el LLM.
-        //  Tipo   : string | ""
-        //  Uso FE: mostrar en el detalle del registro como descripción de la llamada.
+        // Resumen de la conversacion.
 
         "evaluation_criteria": [
-        //  Lista de criterios de evaluación configurados en ElevenLabs.
-        //  Cada criterio es una pregunta que el LLM responde sobre la conversación.
           {
             "criteria_id": "call_evaluation",
-            //  Identificador del criterio (definido en la configuración de ElevenLabs).
-            //  Tipo: string
-
             "result": "success",
-            //  Resultado de este criterio.
-            //  Tipo   : string
-            //  Valores: "success" | "failure" | "unknown"
-
-            "rationale": "El agente ofreció el turno y el usuario confirmó..."
-            //  Justificación del LLM para el resultado asignado.
-            //  Tipo: string
+            "rationale": "El agente ofrecio el turno y el usuario confirmo."
           }
         ],
 
         "data_collection": [
-        //  Lista de campos de datos recopilados durante la conversación.
-        //  Configurados en ElevenLabs como "data collection items".
           {
             "data_collection_id": "something_happened",
-            //  Identificador del campo de recopilación.
-            //  Tipo: string
-
             "value": null,
-            //  Valor recopilado por el agente durante la conversación.
-            //  Tipo   : string | null
-            //  null si el agente no recopiló nada para este campo
-            //  (ej: la pregunta no aplicaba a esta conversación).
-
-            "rationale": "La conversación no indica que haya ocurrido un error..."
-            //  Justificación del LLM para el valor recopilado (o la ausencia).
-            //  Tipo: string
+            "rationale": "No se recopilo informacion relevante."
           }
         ],
 
         "dynamic_vars": {
-        //  Variables del sistema de ElevenLabs disponibles al cierre de la llamada.
-        //  Útil principalmente para trazabilidad y debugging.
-
           "system__call_sid": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
-          //  SID de la llamada en Asterisk. Idéntico a "call_id" en la raíz.
-
           "system__conversation_id": "conv_9801kjrejzrrede8b8zsy3tgj3xd",
-          //  ID de la conversación en ElevenLabs. Idéntico a "conversation_id" abajo.
-
           "system__call_duration_secs": 66,
-          //  Duración total de la conversación en segundos.
-          //  Tipo: number
-
-          "system__caller_id": "62587119",
-          //  Número del trabajador que recibió la llamada.
-
+          "system__caller_id": "+34600000002",
           "system__called_number": "3232",
-          //  Extensión interna de Asterisk que originó la llamada a ElevenLabs.
-
           "system__agent_id": "agent_5601kj8tx92bff28rnn1djcjys45",
-          //  ID del agente ElevenLabs que condujo la conversación.
-
           "system__time_utc": "2026-03-02T23:38:04.880372+00:00",
-          //  Timestamp UTC del momento de cierre de la conversación.
-          //  Tipo: string (ISO 8601)
-
           "system__timezone": "Europe/Madrid"
-          //  Zona horaria configurada para el agente (para el saludo buenos días/tardes).
         },
 
         "conversation_id": "conv_9801kjrejzrrede8b8zsy3tgj3xd",
-        //  ID único de la conversación en ElevenLabs.
-        //  Tipo: string
-        //  Uso FE: puede usarse para enlazar al dashboard de ElevenLabs si aplica.
+        // ID de la conversacion en ElevenLabs.
 
-        "base64_audio": "<string base64 MP3>",
-        //  Audio completo de la conversación codificado en base64 (formato MP3).
-        //  Tipo   : string | null
-        //  null   : si el audio aún no llegó (primera entrega del reporte)
-        //           o si no hubo conversación real.
-        //  NOTAS  :
-        //    - Llega en una segunda entrega del reporte, posterior a la transcripción.
+        "base64_audio": "<string base64 MP3>"
+        // Audio completo en base64 (MP3).
+        // null si no llego a tiempo o no hubo conversacion.
       }
-    },
-
-    "alternative_phone": { ... },
-    //  Mismo esquema que "phone". Solo presente si este número fue intentado.
-
-    "alternative_phone_2": { ... }
-    //  Mismo esquema que "phone". Solo presente si este número fue intentado.
+    }
   },
 
   "last_updated_at": "2026-03-03 00:37:55"
-  //  Timestamp de la última modificación del registro.
-  //  Zona horaria: Europe/Madrid.
-  //  Tipo   : string (formato "YYYY-MM-DD HH:MM:SS")
-  //  Uso FE : mostrar cuándo fue la última actualización del estado.
+  // Timestamp de la ultima modificacion. Zona: Europe/Madrid.
 }
 
-================================================================================
- NOTAS IMPORTANTES PARA EL FRONTEND
-================================================================================
 
-1. EL REPORTE SE ENVÍA VARIAS VECES
-   El mismo call_id puede recibirse múltiples veces con datos progresivamente
-   más completos. Orden habitual:
-     a) Al iniciar el reintento con número alternativo (status: RETRYING).
-     b) Al finalizar la conversación (sin audio aún, base64_audio: null).
-     c) Al llegar el audio (base64_audio presente).
-   → Siempre sobrescribir el estado anterior usando call_id como clave.
-
-2. CÓMO DETERMINAR EL RESULTADO FINAL
-   - Estado global del ciclo:  .status
-   - Decisión del trabajador:  .call_context.confirmation
-   - Resultado IA del último intento:
-       .call_record[.call_record.last_called].elevenlabs_analysis.was_success
-   El campo .status es el más fiable para el estado del ciclo completo.
-
-3. MÚLTIPLES INTENTOS
-   Si se intentaron varios números, call_record tendrá entradas para cada uno:
-     { "phone": {...}, "alternative_phone": {...}, "alternative_phone_2": {...} }
-   Usar "last_called" para identificar cuál fue el definitivo.
-
-4. AUDIO BASE64
-   - Llega en un segundo envío del reporte.
-   - Si base64_audio es null o el campo no existe, el audio aún no está disponible.
-
-5. CAMPOS VACÍOS VS NULL
-   - "" (cadena vacía): el campo existía pero no tenía valor (ej: hourly_rate no informada).
-   - null: el campo no aplicó o no fue posible obtenerlo.
-   - Ambos casos deben tratarse como "sin dato" en la UI.
-   

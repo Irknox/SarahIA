@@ -77,28 +77,51 @@ def get_call_context(phone: str, id_call: int):
             
     return {}
 
-def send_call_report(call_id, call_data):
+def send_partial_call_report(call_id, phone_record):
+    """Envia reporte parcial de un numero que fallo. Solo call_id + el registro de ese numero."""
     report_to_send = {
         "call_id": call_id,
-        "phone": call_data.get("phone"),
-        "alternative_phone": call_data.get("alternative_phone"),
-        "alternative_phone_2": call_data.get("alternative_phone_2"),
-        "call_context": call_data.get("context", {}),
+        "type": "partial",
+        "phone_record": phone_record,
+    }
+
+    log_report = json.loads(json.dumps(report_to_send))
+    has_audio = False
+    analysis = log_report.get("phone_record", {}).get("elevenlabs_analysis", {})
+    if "base64_audio" in analysis:
+        audio_len = len(report_to_send["phone_record"]["elevenlabs_analysis"]["base64_audio"])
+        analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
+        has_audio = True
+
+    print(f"📬 Reporte parcial (call_id={call_id}, audio={'si' if has_audio else 'no'}):")
+    print(json.dumps(log_report, indent=2, ensure_ascii=False))
+
+
+def send_final_call_report(call_id, call_data):
+    """Envia reporte final con contexto completo pero solo el registro del ultimo numero."""
+    call_record = call_data.get("call_record", {})
+    last_called = call_record.get("last_called", "phone")
+    last_phone_record = call_record.get(last_called, {})
+
+    report_to_send = {
+        "call_id": call_id,
+        "type": "final",
         "status": call_data.get("status"),
-        "call_record": call_data.get("call_record", {}),
+        "call_context": call_data.get("context", {}),
+        "call_record": {
+            last_called: last_phone_record,
+        },
         "last_updated_at": call_data.get("updated_at"),
     }
 
-    # Copia del reporte para el log, sin el base64 del audio (puede ser muy largo)
     log_report = json.loads(json.dumps(report_to_send))
     has_audio = False
-    for phone_key in ["phone", "alternative_phone", "alternative_phone_2"]:
-        entry = log_report.get("call_record", {}).get(phone_key, {})
-        analysis = entry.get("elevenlabs_analysis", {})
-        if "base64_audio" in analysis:
-            audio_len = len(report_to_send["call_record"][phone_key]["elevenlabs_analysis"]["base64_audio"])
-            analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
-            has_audio = True
+    entry = log_report.get("call_record", {}).get(last_called, {})
+    analysis = entry.get("elevenlabs_analysis", {})
+    if "base64_audio" in analysis:
+        audio_len = len(report_to_send["call_record"][last_called]["elevenlabs_analysis"]["base64_audio"])
+        analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
+        has_audio = True
 
-    print(f"📬 Reporte a enviar (call_id={call_id}, status={report_to_send['status']}, audio={'si' if has_audio else 'no'}):")
-    print(json.dumps(log_report, indent=2, ensure_ascii=False)) 
+    print(f"📬 Reporte final (call_id={call_id}, status={report_to_send['status']}, audio={'si' if has_audio else 'no'}):")
+    print(json.dumps(log_report, indent=2, ensure_ascii=False))
