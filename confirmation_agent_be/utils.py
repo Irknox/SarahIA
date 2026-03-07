@@ -1,6 +1,10 @@
 import json
+import requests
 
 DB_FILE = "db.json"
+
+REPORT_WEBHOOK_URL = "https://eurofirms-i6tza.ondigitalocean.app/api/call-requests/webhook/call-report"
+REPORT_AUTH_TOKEN = "435kjo3h4p6h34p56hbñlkn345h6IUGOUBJ"
 
 def leer_db():
     try:
@@ -77,6 +81,17 @@ def get_call_context(phone: str, id_call: int):
             
     return {}
 
+def _post_report(report_payload):
+    """Envia un reporte al webhook externo y retorna la respuesta."""
+    headers = {
+        "Content-Type": "application/json",
+        "Auth-Token": REPORT_AUTH_TOKEN,
+    }
+    response = requests.post(REPORT_WEBHOOK_URL, json=report_payload, headers=headers, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
 def send_partial_call_report(call_id, phone_record):
     """Envia reporte parcial de un numero que fallo. Solo call_id + el registro de ese numero."""
     report_to_send = {
@@ -88,13 +103,20 @@ def send_partial_call_report(call_id, phone_record):
     log_report = json.loads(json.dumps(report_to_send))
     has_audio = False
     analysis = log_report.get("phone_record", {}).get("elevenlabs_analysis", {})
-    if "base64_audio" in analysis:
-        audio_len = len(report_to_send["phone_record"]["elevenlabs_analysis"]["base64_audio"])
+    if analysis and "base64_audio" in analysis:
+        audio_val = report_to_send["phone_record"]["elevenlabs_analysis"].get("base64_audio")
+        audio_len = len(audio_val) if audio_val else 0
         analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
         has_audio = True
 
     print(f"📬 Reporte parcial (call_id={call_id}, audio={'si' if has_audio else 'no'}):")
     print(json.dumps(log_report, indent=2, ensure_ascii=False))
+
+    try:
+        resp = _post_report(report_to_send)
+        print(f"✅ Reporte parcial enviado OK (call_id={call_id}): {resp}")
+    except Exception as e:
+        print(f"❌ Error enviando reporte parcial (call_id={call_id}): {e}")
 
 
 def send_final_call_report(call_id, call_data):
@@ -118,10 +140,17 @@ def send_final_call_report(call_id, call_data):
     has_audio = False
     entry = log_report.get("call_record", {}).get(last_called, {})
     analysis = entry.get("elevenlabs_analysis", {})
-    if "base64_audio" in analysis:
-        audio_len = len(report_to_send["call_record"][last_called]["elevenlabs_analysis"]["base64_audio"])
+    if analysis and "base64_audio" in analysis:
+        audio_val = report_to_send["call_record"][last_called]["elevenlabs_analysis"].get("base64_audio")
+        audio_len = len(audio_val) if audio_val else 0
         analysis["base64_audio"] = f"[BASE64_AUDIO — {audio_len} chars]"
         has_audio = True
 
     print(f"📬 Reporte final (call_id={call_id}, status={report_to_send['status']}, audio={'si' if has_audio else 'no'}):")
     print(json.dumps(log_report, indent=2, ensure_ascii=False))
+
+    try:
+        resp = _post_report(report_to_send)
+        print(f"✅ Reporte final enviado OK (call_id={call_id}): {resp}")
+    except Exception as e:
+        print(f"❌ Error enviando reporte final (call_id={call_id}): {e}")
