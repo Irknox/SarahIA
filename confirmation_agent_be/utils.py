@@ -115,8 +115,10 @@ def send_partial_call_report(call_id, phone_record):
     try:
         resp = _post_report(report_to_send)
         print(f"✅ Reporte parcial enviado OK (call_id={call_id}): {resp}")
+        
     except Exception as e:
         print(f"❌ Error enviando reporte parcial (call_id={call_id}): {e}")
+        
 
 
 def send_final_call_report(call_id, call_data):
@@ -147,6 +149,7 @@ def send_final_call_report(call_id, call_data):
         has_audio = True
 
     print(f"📬 Reporte final (call_id={call_id}, status={report_to_send['status']}, audio={'si' if has_audio else 'no'}):")
+    
     print(json.dumps(log_report, indent=2, ensure_ascii=False))
 
     try:

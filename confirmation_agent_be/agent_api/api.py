@@ -229,12 +229,22 @@ async def elevenlabs_post_call_webhook(request: Request):
 
         full_call_data = json.loads(raw_redis_data)
         call_record = full_call_data.get("call_record", {})
-        last_called_attr = call_record.get("last_called", "phone")
 
-        if last_called_attr in call_record:
-            call_record[last_called_attr]["elevenlabs_analysis"] = elevenlabs_analysis
+        
+        target_attr = None
+        for attr in ["alternative_phone_2", "alternative_phone", "phone"]:
+            if attr in call_record and call_record[attr].get("number") == phone_number:
+                if "elevenlabs_analysis" not in call_record[attr]:
+                    target_attr = attr
+                    break
+        
+        if not target_attr:
+            target_attr = call_record.get("last_called", "phone")
+
+        if target_attr in call_record:
+            call_record[target_attr]["elevenlabs_analysis"] = elevenlabs_analysis
             full_call_data["call_record"] = call_record
-            print(f"✅ Análisis guardado para {call_id} en el registro '{last_called_attr}'")
+            print(f"✅ Análisis guardado para {call_id} en el registro '{target_attr}'")
 
         if is_success=="success":
             print (f"✅ Flujo de llamada exitosa, oferta ofrecida y respondida")
@@ -264,16 +274,18 @@ async def elevenlabs_post_call_webhook(request: Request):
                 continue
             call_data = json.loads(raw_data)
             record = call_data.get("call_record", {})
-            last = record.get("last_called", "phone")
 
-            if last in record and "elevenlabs_analysis" in record[last]:
-                stored_conv_id = record[last]["elevenlabs_analysis"].get("conversation_id")
-                if stored_conv_id == conversation_id:
-                    record[last]["elevenlabs_analysis"]["base64_audio"] = audio_data
-                    redis_client.set(key, json.dumps(call_data), ex=86400)
-                    print(f"✅ Audio guardado en Redis para call_id={key.split(':')[1]}, conversation_id={conversation_id}")
-                    found = True
-                    break
+            for attr in ["phone", "alternative_phone", "alternative_phone_2"]:
+                if attr in record and "elevenlabs_analysis" in record[attr]:
+                    stored_conv_id = record[attr]["elevenlabs_analysis"].get("conversation_id")
+                    if stored_conv_id == conversation_id:
+                        record[attr]["elevenlabs_analysis"]["base64_audio"] = audio_data
+                        redis_client.set(key, json.dumps(call_data), ex=86400)
+                        print(f"✅ Audio guardado en Redis para call_id={key.split(':')[1]}, attr={attr}, conversation_id={conversation_id}")
+                        found = True
+                        break
+            if found:
+                break
 
         if not found:
             print(f"⚠️ Audio recibido pero transcripción aún no procesada — guardando en temp_audio:{conversation_id}")
@@ -306,11 +318,13 @@ async def notify_call_issue(
     call_data = json.loads(raw_data)
     call_record = call_data.get("call_record", {})
     
-    target_attr = None
-    for attr in ["phone", "alternative_phone", "alternative_phone_2"]:
-        if call_data.get(attr) == phone_reported:
-            target_attr = attr
-            break
+    target_attr = call_record.get("last_called", "phone")
+    if target_attr not in call_record or call_record[target_attr].get("number") != phone_reported:
+        target_attr = None
+        for attr in ["alternative_phone_2", "alternative_phone", "phone"]:
+            if attr in call_record and call_record[attr].get("number") == phone_reported:
+                target_attr = attr
+                break
 
     if not target_attr:
         return {"status": "error", "message": "Número no reconocido"}
@@ -328,7 +342,7 @@ async def notify_call_issue(
             "failed_reason": reason
         }
         #redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
-        print(f"[Webhook] IA reporta fallo primero para {phone_reported}. Marcando FAILED global.")
+        print(f"[Webhook] IA reporta fallo primero para {phone_reported}. Marcando FAILED global desde /webhooks/call-issue-detected.")
 
     call_data["call_record"] = call_record
     redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)

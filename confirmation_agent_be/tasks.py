@@ -115,11 +115,13 @@ def sync_call_status():
 
         if asterisk_status == "COMPLETED":
             print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
+            redis_client.delete(s_key)
             tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "COMPLETED"])
             continue
 
         elif timeout_reached and asterisk_status not in ["DISPATCHED", "IN_PROGRESS"]:
             print(f"[Beat] {call_id}: Tiempo limite alcanzado, ultimo estado: {asterisk_status}.")
+            redis_client.delete(s_key)
             tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, asterisk_status])
             continue
 
@@ -146,8 +148,11 @@ def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
         has_audio = True
 
     if needs_audio and not has_audio:
-        print(f"[Final] Postergando reporte para {call_id}: Esperando audio...")
-        raise self.retry(countdown=30)
+        try:
+            print(f"[Final] Postergando reporte para {call_id}: Esperando audio...")
+            raise self.retry(countdown=30)
+        except self.MaxRetriesExceededError:
+            print(f"[Final] Max reintentos alcanzado para {call_id}. Enviando reporte sin audio.")
 
     call_data["status"] = final_status
     call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -171,8 +176,11 @@ def tarea_enviar_reporte_parcial(self, call_id, phone_attr):
     has_audio = has_analysis and phone_record["elevenlabs_analysis"].get("base64_audio")
 
     if has_analysis and not has_audio:
-        print(f"[Parcial] Postergando reporte parcial para {call_id}/{phone_attr}: Esperando audio...")
-        raise self.retry(countdown=30)
+        try:
+            print(f"[Parcial] Postergando reporte parcial para {call_id}/{phone_attr}: Esperando audio...")
+            raise self.retry(countdown=30)
+        except self.MaxRetriesExceededError:
+            print(f"[Parcial] Max reintentos alcanzado para {call_id}/{phone_attr}. Enviando sin audio.")
 
     send_partial_call_report(call_id, phone_record)
 
@@ -180,6 +188,7 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
         confirmation = call_data.get("context", {}).get("confirmation", "No confirmado")
         if confirmation != "No confirmado":
             print(f"[Beat] {call_id}: Herramienta usada (confirmation='{confirmation}'). Finalizando sin reintento.")
+            redis_client.delete(s_key)
             tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "FAILED"])
             return
 
@@ -228,6 +237,7 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             )
         else:
             print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")
+            redis_client.delete(s_key)
             tarea_finalizar_y_enviar_reporte.apply_async(args=[call_id, "FAILED"])
             
 
