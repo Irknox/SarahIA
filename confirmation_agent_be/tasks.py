@@ -204,14 +204,19 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
         next_attr = retry_map.get(last_attr)
         next_number = call_data.get(next_attr) if next_attr else None
 
-        was_reported_by_11labs = call_record.get(last_attr, {}).get("failed_reason") is not None
+        last_record = call_record.get(last_attr, {})
+        has_failed_reason = last_record.get("failed_reason") is not None
 
         if next_number:
             print(f"[Beat] Reintentando {call_id} -> {next_attr}: {next_number}")
             call_record[last_attr]["status"] = "FAILED"
 
-            if not was_reported_by_11labs:
-                call_record[last_attr]["failed_reason"] = "AST_ISSUE"
+            if not has_failed_reason:
+                analysis = last_record.get("elevenlabs_analysis")
+                if analysis:
+                    call_record[last_attr]["failed_reason"] = analysis.get("termination_reason", "11LABS_FAILURE")
+                else:
+                    call_record[last_attr]["failed_reason"] = "AST_ISSUE"
 
             call_record["last_called"] = next_attr
             call_record[next_attr] = {
