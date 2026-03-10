@@ -111,7 +111,7 @@ def sync_call_status():
         
         call_data = json.loads(raw_data)     
         updated_at = datetime.strptime(call_data["updated_at"], "%Y-%m-%d %H:%M:%S")
-        timeout_reached = datetime.now() > (updated_at + timedelta(minutes=5))
+        timeout_reached = datetime.now() > (updated_at + timedelta(minutes=15))
 
         if asterisk_status == "COMPLETED":
             print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
@@ -129,9 +129,9 @@ def sync_call_status():
             print(f"[Beat] {call_id}: Fallo de red/técnico ({asterisk_status}).")
             preparar_reintento_o_fallo(call_id, call_data, s_key)
 
-@celery_app.task(bind=True, max_retries=10, default_retry_delay=30)
-def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
-    """Envia el reporte FINAL con contexto completo pero solo el registro del ultimo numero."""
+@celery_app.task
+def tarea_finalizar_y_enviar_reporte(call_id, final_status):
+    """Envia el reporte FINAL inmediatamente. Si falta audio, agenda espera."""
     raw_data = redis_client.get(f"call_data:{call_id}")
     if not raw_data: return
 
@@ -139,32 +139,26 @@ def tarea_finalizar_y_enviar_reporte(self, call_id, final_status):
     record = call_data.get("call_record", {})
     last = record.get("last_called")
 
-    needs_audio = False
-    if last in record and "elevenlabs_analysis" in record[last]:
-        needs_audio = True
-
-    has_audio = False
-    if needs_audio and record[last]["elevenlabs_analysis"].get("base64_audio"):
-        has_audio = True
-
-    if needs_audio and not has_audio:
-        try:
-            print(f"[Final] Postergando reporte para {call_id}: Esperando audio...")
-            raise self.retry(countdown=30)
-        except self.MaxRetriesExceededError:
-            print(f"[Final] Max reintentos alcanzado para {call_id}. Enviando reporte sin audio.")
-
     call_data["status"] = final_status
     call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     send_final_call_report(call_id, call_data)
-    redis_client.delete(f"call_data:{call_id}")
     redis_client.delete(f"call_status:{call_id}")
 
+    needs_audio = last in record and "elevenlabs_analysis" in record[last]
+    has_audio = needs_audio and record[last]["elevenlabs_analysis"].get("base64_audio")
 
-@celery_app.task(bind=True, max_retries=10, default_retry_delay=30)
-def tarea_enviar_reporte_parcial(self, call_id, phone_attr):
-    """Envia reporte parcial de un numero que fallo. Espera audio si 11labs conecto."""
+    if needs_audio and not has_audio:
+        print(f"[Final] Reporte enviado sin audio para {call_id}. Esperando audio hasta 15 min...")
+        redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=1200)
+        tarea_esperar_y_enviar_audio.apply_async(args=[call_id, last, True], countdown=30)
+    else:
+        redis_client.delete(f"call_data:{call_id}")
+
+
+@celery_app.task
+def tarea_enviar_reporte_parcial(call_id, phone_attr):
+    """Envia reporte parcial inmediatamente. Si falta audio, agenda espera."""
     raw_data = redis_client.get(f"call_data:{call_id}")
     if not raw_data: return
 
@@ -172,17 +166,45 @@ def tarea_enviar_reporte_parcial(self, call_id, phone_attr):
     record = call_data.get("call_record", {})
     phone_record = record.get(phone_attr, {})
 
+    send_partial_call_report(call_id, phone_record)
+
     has_analysis = "elevenlabs_analysis" in phone_record
     has_audio = has_analysis and phone_record["elevenlabs_analysis"].get("base64_audio")
 
     if has_analysis and not has_audio:
-        try:
-            print(f"[Parcial] Postergando reporte parcial para {call_id}/{phone_attr}: Esperando audio...")
-            raise self.retry(countdown=30)
-        except self.MaxRetriesExceededError:
-            print(f"[Parcial] Max reintentos alcanzado para {call_id}/{phone_attr}. Enviando sin audio.")
+        print(f"[Parcial] Reporte parcial enviado sin audio para {call_id}/{phone_attr}. Esperando audio hasta 15 min...")
+        tarea_esperar_y_enviar_audio.apply_async(args=[call_id, phone_attr, False], countdown=30)
 
-    send_partial_call_report(call_id, phone_record)
+
+@celery_app.task(bind=True, max_retries=29, default_retry_delay=30)
+def tarea_esperar_y_enviar_audio(self, call_id, phone_attr, is_final):
+    """Espera hasta 15 min por el audio. Si llega, reenvia el mismo reporte con audio incluido."""
+    raw_data = redis_client.get(f"call_data:{call_id}")
+    if not raw_data:
+        print(f"[Audio] call_data:{call_id} ya no existe. Cerrando.")
+        return
+
+    call_data = json.loads(raw_data)
+    record = call_data.get("call_record", {})
+    phone_record = record.get(phone_attr, {})
+    analysis = phone_record.get("elevenlabs_analysis", {})
+    audio = analysis.get("base64_audio")
+
+    if audio:
+        print(f"[Audio] Audio recibido para {call_id}/{phone_attr}. Reenviando reporte con audio.")
+        if is_final:
+            send_final_call_report(call_id, call_data)
+            redis_client.delete(f"call_data:{call_id}")
+        else:
+            send_partial_call_report(call_id, phone_record)
+        return
+
+    try:
+        raise self.retry()
+    except self.MaxRetriesExceededError:
+        print(f"[Audio] 15 min sin audio para {call_id}/{phone_attr}. Cerrando tarea.")
+        if is_final:
+            redis_client.delete(f"call_data:{call_id}")
 
 def preparar_reintento_o_fallo(call_id, call_data, s_key):
         confirmation = call_data.get("context", {}).get("confirmation", "No confirmado")

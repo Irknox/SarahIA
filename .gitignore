@@ -23,3 +23,5 @@ CLAUDE.md
 confirmation_agent_fe/
 
 AMI/pjsip.extensions_custom.conf
+
+AMI/pjsip.extensions_custom_simplified.conf

@@ -318,6 +318,7 @@ async def notify_call_issue(
     call_data = json.loads(raw_data)
     call_record = call_data.get("call_record", {})
     
+    ##Validar que se fije en numeros duplicados
     target_attr = call_record.get("last_called", "phone")
     if target_attr not in call_record or call_record[target_attr].get("number") != phone_reported:
         target_attr = None
@@ -336,13 +337,16 @@ async def notify_call_issue(
     if already_failed:
         call_record[target_attr]["failed_reason"] = f"{reason} (Confirmado por IA)"
     else:
-        call_record[target_attr] = {
-            "number": phone_reported,
-            "status": "FAILED",
-            "failed_reason": reason
-        }
-        #redis_client.set(f"call_status:{call_id}", "FAILED", ex=86400)
-        print(f"[Webhook] IA reporta fallo primero para {phone_reported}. Marcando FAILED global desde /webhooks/call-issue-detected.")
+        if target_attr in call_record:
+            call_record[target_attr]["status"] = "FAILED"
+            call_record[target_attr]["failed_reason"] = reason
+        else:
+            call_record[target_attr] = {
+                "number": phone_reported,
+                "status": "FAILED",
+                "failed_reason": reason
+            }
+        print(f"[Webhook] IA reporta fallo para {phone_reported} en '{target_attr}'. Razon: {reason}")
 
     call_data["call_record"] = call_record
     redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)

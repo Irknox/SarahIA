@@ -149,8 +149,7 @@ El Agent API esta expuesto via HTTPS a traves de Nginx.
 #### Pre-call: `POST /webhooks/elevenlabs-pre-call`
 Autenticacion: header `auth-token`
 
-ElevenLabs lo llama antes de que el agente hable. El sistema busca el contexto en Redis usando los headers SIP (`X-Call-ID`) y responde con las variables dinamicas del turno (nombre del trabajador, fecha, horario, centro, instrucciones del agente). El agente arranca con:
-> *"Hola mi nombre es Sarah de Eurofirms, estoy hablando con {nombre}?"*
+ElevenLabs lo llama antes de que el agente hable. El sistema busca el contexto en Redis usando los headers SIP (`X-Call-ID`) y responde con las variables dinamicas del turno (nombre del trabajador, fecha, horario, centro, instrucciones del agente). El agente arranca con un saludo personalizado usando el nombre del trabajador.
 
 #### Post-call transcription: `POST /webhooks/elevenlabs-post-call`
 Autenticacion: firma HMAC-SHA256 (header `elevenlabs-signature` con formato `t=<timestamp>,v0=<hash>`)
