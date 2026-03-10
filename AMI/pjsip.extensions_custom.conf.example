@@ -51,6 +51,7 @@ exten => s,1,NoOp(Finalizando llamada ID: ${ARG1})
  same => n,Set(NUEVO_STATUS=${IF($["${ESTADO_DIAL}"="ANSWER"]?COMPLETED:${IF($["${ESTADO_DIAL}"="BUSY"]?BUSY:${IF($["${ESTADO_DIAL}"="NOANSWER"]?NOANSWER:FAILED)})})})
  same => n,ExecIf($["${HANGUPCAUSE}"="16"]?Set(NUEVO_STATUS=COMPLETED))
  same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_status:${ARG1}" 3600 "${NUEVO_STATUS}")
+ same => n,System(redis-cli -a "<REDIS_PASSWORD>" -p <REDIS_PORT> SETEX "call_fail_reason:${ARG1}" 1200 "${ESTADO_DIAL}")
  same => n,Return()
 
 

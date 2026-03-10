@@ -238,7 +238,10 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
                 if analysis:
                     call_record[last_attr]["failed_reason"] = analysis.get("termination_reason", "11LABS_FAILURE")
                 else:
-                    call_record[last_attr]["failed_reason"] = "AST_ISSUE"
+                    ast_reason = redis_client.get(f"call_fail_reason:{call_id}")
+                    call_record[last_attr]["failed_reason"] = ast_reason or "AST_ISSUE"
+                    if ast_reason:
+                        redis_client.delete(f"call_fail_reason:{call_id}")
 
             call_record["last_called"] = next_attr
             call_record[next_attr] = {
