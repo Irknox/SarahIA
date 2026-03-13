@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from utils import leer_db, guardar_db, send_partial_call_report, send_final_call_report
 import redis
 import json
+import re
 
 load_dotenv()
 
@@ -67,22 +68,31 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
             info = json.loads(existing_data)
             info["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         else:
+            sections = {}
+            if agent_instructions:
+                parts = re.split(r'=== ([A-Z0-9_]+) ===\n', agent_instructions)
+                for i in range(1, len(parts), 2):
+                    sections[parts[i].strip()] = parts[i + 1].strip() if i + 1 < len(parts) else ''
+
             info = {
                 "status": "DISPATCHED",
                 "phone": user_phone,
                 "alternative_phone": alternative_phone,
                 "alternative_phone_2": alternative_phone_2,
-                "call_record": { 
+                "call_record": {
                     "last_called": "phone",
-                    "phone": { 
+                    "phone": {
                         "number": user_phone,
                         "status": "DISPATCHED",
                         "failed_reason": None
-                    },  
+                    },
                 },
                 "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "context": context,             
-                "agent_instructions": agent_instructions 
+                "context": context,
+                "agent_instructions": sections.get("GENERAL", agent_instructions),
+                "first_message": sections.get("PROMPT_INICIAL", ""),
+                "recovery_prompt": sections.get("PROMT_RECONFIRMACION", ""),
+                "current_prompt": sections.get("GENERAL", agent_instructions)
             }
         redis_client.set(f"call_data:{call_id}", json.dumps(info), ex=86400)
         redis_client.set(f"call_status:{call_id}", "DISPATCHED", ex=86400)
@@ -251,6 +261,17 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             }
             call_data["status"] = "RETRYING"
             call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            last_analysis = last_record.get("elevenlabs_analysis")
+            if last_analysis and last_analysis.get("summary"):
+                recovery_prompt = call_data.get("recovery_prompt")
+                if recovery_prompt:
+                    summary = last_analysis.get("summary", "")
+                    call_data["current_prompt"] = (
+                        f"{recovery_prompt}\n\n"
+                        f"Esta es la transcripción de la llamada anterior, úsala como contexto "
+                        f"de dónde quedó la conversación anterior con el usuario: {summary}"
+                    )
 
             redis_client.set(f"call_data:{call_id}", json.dumps(call_data), ex=86400)
             redis_client.set(s_key, "DISPATCHED", ex=86400)

@@ -87,7 +87,7 @@ request: Request,
 
     context_dict = call_data.get("context", {}) 
     
-    agent_instructions = call_data.get("agent_instructions", "No hay instrucciones específicas para el agente.")
+    agent_instructions = call_data.get("current_prompt", call_data.get("agent_instructions", "No hay instrucciones específicas para el agente."))
     
     variables_to_11Labs = {
         "username": context_dict.get("worker_first_name", "Trabajador"),
@@ -109,7 +109,7 @@ request: Request,
         "prompt": {
             "prompt": agent_instructions,
         },
-        "first_message": f"Hola mi nombre es Sarah de Eurofirms, estoy hablando con {variables_to_11Labs.get('username')}?",
+        "first_message": call_data.get("first_message") or f"Hola mi nombre es Sarah de Eurofirms, estoy hablando con {variables_to_11Labs.get('username')}?",
     },
             
         }

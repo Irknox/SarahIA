@@ -1,0 +1,208 @@
+================================================================================
+ DOCUMENTACION DEL REPORTE DE LLAMADA — SarahIA
+================================================================================
+
+El backend envia DOS tipos de reporte:
+  1. PARCIAL — Cada vez que un numero falla. Solo info de ese intento fallido.
+  2. FINAL  — Al terminar el ciclo (exito o sin mas numeros). Incluye contexto
+              del turno pero SOLO el registro del ultimo numero intentado(Con el que dio falla o exito).
+
+Se debe usar "call_id" + "type" como clave para procesar cada reporte.
+
+================================================================================
+ REPORTE PARCIAL (type: "partial")
+================================================================================
+
+Se envia cada vez que un numero falla (Asterisk o ElevenLabs).
+Incluye solo la info del intento fallido.
+
+{
+  "call_id": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+  // ID unico de la llamada.
+
+  "type": "partial",
+  // Siempre "partial" para reportes de fallo individual.
+
+  "phone_record": {
+  // Registro del numero que acaba de fallar.
+
+    "number": "+34600000001",
+    // Numero que se marco.
+
+    "status": "FAILED",
+    // Estado de este intento.
+    // Valores: "FAILED" | "BUSY" | "NOANSWER" | "AST_FAILED"
+
+    "failed_reason": "AST_ISSUE",
+    // Motivo del fallo.
+    // Ejemplos: "AST_ISSUE", "IA detecto buzon de voz", "voicemail_detected",
+    //           "no_answer", "busy", "call_failed", un failure_reason de 11labs.
+    // null si no se determino la razon.
+
+    "elevenlabs_analysis": {
+    // Solo presente si la llamada llego a conectar con ElevenLabs.
+    // Ausente en fallos de Asterisk (AST_FAILED, BUSY, NOANSWER sin agente).
+
+      "was_success": "failure",
+      // Resultado segun ElevenLabs. En parciales siempre sera "failure".
+
+      "termination_reason": "webhook_detected_voicemail",
+      // Motivo tecnico de terminacion de la sesion en ElevenLabs.
+
+      "summary": "La llamada fue atendida por un contestador automatico.",
+      // Resumen en texto libre generado por el LLM.
+
+      "evaluation_criteria": [
+      // Criterios de evaluacion configurados en ElevenLabs.
+        {
+          "criteria_id": "call_evaluation",
+          "result": "failure",
+          // "success" | "failure" | "unknown"
+          "rationale": "El agente no pudo completar la conversacion..."
+        }
+      ],
+
+      "data_collection": [
+      // Datos recopilados durante la conversacion.
+        {
+          "data_collection_id": "something_happened",
+          "value": null,
+          // string | null — null si no aplico.
+          "rationale": "No se recopilo informacion relevante."
+        }
+      ],
+
+      "dynamic_vars": {
+      // Variables del sistema de ElevenLabs al cierre.
+        "system__call_sid": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+        "system__conversation_id": "conv_abc123",
+        "system__call_duration_secs": 12,
+        "system__caller_id": "+34600000001",
+        "system__called_number": "3232",
+        "system__agent_id": "agent_xyz",
+        "system__time_utc": "2026-03-02T23:38:04.880372+00:00",
+        "system__timezone": "Europe/Madrid"
+      },
+
+      "conversation_id": "conv_abc123",
+      // ID de la conversacion en ElevenLabs.
+
+      "base64_audio": "<string base64 MP3>"
+      // Audio completo en base64 (MP3).
+      // Puede ser null si el audio no llego a tiempo tras reintentos.
+    }
+  }
+}
+
+
+================================================================================
+ REPORTE FINAL (type: "final")
+================================================================================
+
+Se envia una sola vez al terminar el ciclo: la llamada fue exitosa
+o se agotaron todos los numeros disponibles.
+Incluye contexto del turno pero SOLO el registro del ultimo numero.
+Los fallos anteriores ya fueron reportados como parciales.
+
+{
+  "call_id": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+  // ID unico de la llamada.
+
+  "type": "final",
+  // Siempre "final" para el reporte de cierre.
+
+  "status": "COMPLETED",
+  // Estado global del ciclo completo.
+  // Valores:
+  //   "COMPLETED" — Llamada exitosa, agente completo la conversacion.
+  //   "FAILED"    — Todos los intentos fallaron.
+
+  "call_context": {
+  // Contexto del turno que se intento confirmar.
+    "worker_first_name": "Elena",
+    "worker_name": "Elena Garcia Lopez",
+    "position": "Camarera",
+    "work_center": "Hotel Miramar",
+    "address": "Calle Gran Via 45, Madrid",
+    "shift_date": "2026-03-06",
+    "shift_start_time": "08:00",
+    "shift_end_time": "16:00",
+    "instructions": "Presentarse en recepcion",
+    "hourly_rate": "12.50",
+    "confirmation": "Turno confirmado"
+    // Decision verbal registrada por el agente.
+    // Valores: "Turno confirmado" | "Turno rechazado" | "No confirmado"
+  },
+
+  "call_record": {
+  // Solo contiene el registro del ULTIMO numero intentado.
+  // Los anteriores ya fueron enviados como reportes parciales.
+
+    "alternative_phone": {
+    // Registro del ultimo intento. La clave coincide con "last_called".
+
+      "number": "+34600000002",
+      // Numero marcado.
+
+      "status": "COMPLETED",
+      // Estado de este intento.
+      // Valores: "COMPLETED" | "FAILED"
+
+      "failed_reason": null,
+      // null si fue exitoso. String con motivo si fallo.
+
+      "elevenlabs_analysis": {
+      // Analisis de ElevenLabs. Presente si hubo conversacion con el agente.
+      // Misma estructura que en el reporte parcial.
+
+        "was_success": "success",
+        // "success" | "failure"
+
+        "termination_reason": "Client disconnected: 1000",
+        // Motivo tecnico de terminacion.
+
+        "summary": "Sarah de Eurofirms llama a Elena para confirmar...",
+        // Resumen de la conversacion.
+
+        "evaluation_criteria": [
+          {
+            "criteria_id": "call_evaluation",
+            "result": "success",
+            "rationale": "El agente ofrecio el turno y el usuario confirmo."
+          }
+        ],
+
+        "data_collection": [
+          {
+            "data_collection_id": "something_happened",
+            "value": null,
+            "rationale": "No se recopilo informacion relevante."
+          }
+        ],
+
+        "dynamic_vars": {
+          "system__call_sid": "7ccfbb6a-4cdf-43c5-b98a-3a6ae2887074",
+          "system__conversation_id": "conv_9801kjrejzrrede8b8zsy3tgj3xd",
+          "system__call_duration_secs": 66,
+          "system__caller_id": "+34600000002",
+          "system__called_number": "3232",
+          "system__agent_id": "agent_5601kj8tx92bff28rnn1djcjys45",
+          "system__time_utc": "2026-03-02T23:38:04.880372+00:00",
+          "system__timezone": "Europe/Madrid"
+        },
+
+        "conversation_id": "conv_9801kjrejzrrede8b8zsy3tgj3xd",
+        // ID de la conversacion en ElevenLabs.
+
+        "base64_audio": "<string base64 MP3>"
+        // Audio completo en base64 (MP3).
+        // null si no llego a tiempo o no hubo conversacion.
+      }
+    }
+  },
+
+  "last_updated_at": "2026-03-03 00:37:55"
+  // Timestamp de la ultima modificacion. Zona: Europe/Madrid.
+}
+
+

@@ -1,0 +1,131 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: SarahAI-redis
+    command:
+      [
+        "redis-server",
+        "--appendonly","yes",
+        "--save","60","1",
+        "--requirepass","${REDIS_PASSWORD}",
+        "--bind","0.0.0.0",
+        "--port", "6379",
+        "--protected-mode","no"
+      ]
+    ports:
+      - "127.0.0.1:6380:6379" # 
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD","sh","-lc","redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  ami:
+      build: ./AMI  
+      container_name: sarah-ami
+      restart: always
+      network_mode: "host"
+      env_file: .env
+
+  backend-api:
+    build: ./confirmation_agent_be
+    container_name: SarahAI-api
+    restart: always
+    network_mode: "host"
+    command: uvicorn main:app --host 0.0.0.0 --port 7676
+    env_file: .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./confirmation_agent_be/db.json:/app/db.json
+    depends_on:
+      - redis
+
+  celery-worker:
+    build: ./confirmation_agent_be
+    container_name: SarahAI-worker
+    restart: always
+    network_mode: "host"
+    command: celery -A tasks worker --loglevel=info
+    env_file: .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./confirmation_agent_be/db.json:/app/db.json
+    depends_on:
+      - redis
+
+  celery-beat:
+    build: ./confirmation_agent_be
+    container_name: SarahAI-beat
+    restart: always
+    network_mode: "host"
+    command: celery -A tasks beat --loglevel=info
+    env_file: .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./confirmation_agent_be/db.json:/app/db.json
+    depends_on:
+      - redis
+
+  # sarahai-frontend: (frontend no incluido en este repositorio)
+  #   build:
+  #     context: ./confirmation_agent_fe
+  #     args:
+  #       - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
+  #   container_name: sarahai-frontend
+  #   restart: always
+  #   network_mode: "host"
+  #   environment:
+  #     - NEXT_PUBLIC_AUTH_TOKEN=${NEXT_PUBLIC_AUTH_TOKEN}
+  #     - FE_URL=http://64.23.170.136:7373/SchedulerAgent/API
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - ACCESS_KEY=${ACCESS_KEY}
+
+  agent-api:
+    build: ./confirmation_agent_be
+    container_name: SarahAI-agent-api
+    restart: always
+    network_mode: "host"
+    command: uvicorn agent_api.api:app --host 0.0.0.0 --port 7575
+    env_file: .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./confirmation_agent_be/db.json:/app/db.json
+    depends_on:
+      - redis
+
+  gateway:
+    image: nginx:alpine
+    container_name: sarahai-gateway
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro  
+    ports:
+      - "7373:7373"
+      - "7001:7001"
+    depends_on:
+      # sarahai-frontend:  # frontend no incluido en este repositorio
+      #   condition: service_started
+      backend-api:
+        condition: service_started
+      ami:
+        condition: service_started
+
+volumes:
+  redis-data:

@@ -11,6 +11,9 @@ npm-debug.log*
 
 .env
 
+.claude 
+*.claude
+
 backend/db.json
 celerybeat-schedule
 
@@ -19,6 +22,9 @@ celerybeat-schedule
 
 CLAUDE.md
 *CLAUDE.md
+
+multi-template-types-integracion.md
+*multi-template-types-integracion.md
 
 confirmation_agent_fe/
 
