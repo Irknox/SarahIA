@@ -321,10 +321,15 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
             else:
                 send_partial_call_report(call_id, call_record[last_attr])
 
-            disparar_llamada_ami.apply_async(
-                args=[next_number, call_data["alternative_phone"], call_data.get("alternative_phone_2"), AMI_EXTENSION, call_id],
-                countdown=300
-            )
+            retry_time = (datetime.now(tz=madrid_tz) + timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
+            pending_retry = {
+                "phone": next_number,
+                "alternative_phone": call_data["alternative_phone"],
+                "alternative_phone_2": call_data.get("alternative_phone_2"),
+                "agent_ext": AMI_EXTENSION,
+                "scheduled_time": retry_time
+            }
+            redis_client.set(f"pending_call:{call_id}", json.dumps(pending_retry), ex=86400)
         else:
             print(f"[Beat] {call_id}: Sin más números. Cerrando como fallida.")
             redis_client.delete(s_key)
