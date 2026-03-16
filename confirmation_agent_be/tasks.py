@@ -7,6 +7,7 @@ from utils import leer_db, guardar_db, send_partial_call_report, send_final_call
 import redis
 import json
 import re
+import pytz
 
 load_dotenv()
 
@@ -14,6 +15,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://:password@127.0.0.1:6380/0")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 redis_client = redis.StrictRedis.from_url(REDIS_URL, decode_responses=True)
 
+madrid_tz = pytz.timezone("Europe/Madrid")
 
 celery_app = Celery(
     "Sarah_tasks",
@@ -25,27 +27,64 @@ celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
-    timezone='Europe/Madrid',  
-    enable_utc=False,
-    task_acks_late=True,            
-    task_ignore_result=True,        
+    timezone='Europe/Madrid',
+    enable_utc=True,
+    task_acks_late=True,
+    task_ignore_result=True,
     result_expires=3600,
     task_reject_on_worker_lost=True,
     broker_transport_options={
-        'visibility_timeout': 3600   
+        'visibility_timeout': 3600
     }
 )
 
 celery_app.conf.beat_schedule = {
     'sincronizar-estados-redis-db': {
         'task': 'sync_call_status',
-        'schedule': 15.0, 
+        'schedule': 15.0,
+    },
+    'verificar-llamadas-pendientes': {
+        'task': 'check_pending_calls',
+        'schedule': 15.0,
     },
 }
 
 AMI_CONTROL_URL = os.getenv("AMI_URL",)
 AMI_TOKEN = os.getenv("AMI_CONTROL_TOKEN")
 AMI_EXTENSION=os.getenv('AMI_EXTENSION')
+
+@celery_app.task(name="check_pending_calls")
+def check_pending_calls():
+    """
+    Revisa llamadas pendientes en Redis y dispara las que ya alcanzaron su hora programada.
+    """
+    pending_keys = redis_client.keys("pending_call:*")
+    ahora = datetime.now(tz=madrid_tz)
+
+    for p_key in pending_keys:
+        raw = redis_client.get(p_key)
+        if not raw:
+            continue
+
+        pending = json.loads(raw)
+        scheduled_time = madrid_tz.localize(
+            datetime.strptime(pending["scheduled_time"], "%Y-%m-%d %H:%M:%S")
+        )
+
+        if ahora >= scheduled_time:
+            call_id = p_key.split(":")[1]
+            print(f"[Beat] Hora alcanzada para {call_id}. Disparando llamada.")
+            redis_client.delete(p_key)
+            disparar_llamada_ami.delay(
+                pending["phone"],
+                pending["alternative_phone"],
+                pending["alternative_phone_2"],
+                pending["agent_ext"],
+                call_id,
+                pending.get("context"),
+                pending.get("agent_instructions")
+            )
+
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
 def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_2, agent_ext, call_id, context=None, agent_instructions=None):
@@ -66,7 +105,7 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
         
         if existing_data:
             info = json.loads(existing_data)
-            info["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            info["updated_at"] = datetime.now(tz=madrid_tz).strftime("%Y-%m-%d %H:%M:%S")
         else:
             sections = {}
             if agent_instructions:
@@ -87,7 +126,7 @@ def disparar_llamada_ami(self, user_phone, alternative_phone, alternative_phone_
                         "failed_reason": None
                     },
                 },
-                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "updated_at": datetime.now(tz=madrid_tz).strftime("%Y-%m-%d %H:%M:%S"),
                 "context": context,
                 "agent_instructions": sections.get("GENERAL", agent_instructions),
                 "first_message": sections.get("PROMPT_INICIAL", ""),
@@ -121,7 +160,7 @@ def sync_call_status():
         
         call_data = json.loads(raw_data)     
         updated_at = datetime.strptime(call_data["updated_at"], "%Y-%m-%d %H:%M:%S")
-        timeout_reached = datetime.now() > (updated_at + timedelta(minutes=15))
+        timeout_reached = datetime.now(tz=madrid_tz) > (madrid_tz.localize(updated_at) + timedelta(minutes=15))
 
         if asterisk_status == "COMPLETED":
             print(f"[Beat] {call_id}: Flujo completado: {asterisk_status}.")
@@ -150,7 +189,7 @@ def tarea_finalizar_y_enviar_reporte(call_id, final_status):
     last = record.get("last_called")
 
     call_data["status"] = final_status
-    call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    call_data["updated_at"] = datetime.now(tz=madrid_tz).strftime("%Y-%m-%d %H:%M:%S")
 
     send_final_call_report(call_id, call_data)
     redis_client.delete(f"call_status:{call_id}")
@@ -260,7 +299,7 @@ def preparar_reintento_o_fallo(call_id, call_data, s_key):
                 "failed_reason": None
             }
             call_data["status"] = "RETRYING"
-            call_data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            call_data["updated_at"] = datetime.now(tz=madrid_tz).strftime("%Y-%m-%d %H:%M:%S")
 
             last_analysis = last_record.get("elevenlabs_analysis")
             if last_analysis and last_analysis.get("summary"):
