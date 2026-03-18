@@ -4,6 +4,7 @@ const AmiClient = require("asterisk-ami-client");
 
 const {
   AMI_CONTROL_TOKEN,
+  CSCH_AUTH_TOKEN,
   AMI_HOST = "127.0.0.1",
   AMI_PORT = 5038,
   AMI_USER,
@@ -12,6 +13,7 @@ const {
 } = process.env;
 
 if (!AMI_CONTROL_TOKEN) throw new Error("Falta AMI_CONTROL_TOKEN");
+if (!CSCH_AUTH_TOKEN) throw new Error("Falta CSCH_AUTH_TOKEN");
 if (!AMI_USER || !AMI_PASS) throw new Error("Faltan AMI_USER/AMI_PASS");
 
 const app = express();
@@ -65,6 +67,61 @@ app.post("/originate", async (req, res) => {
     });
   } catch (error) {
     console.error("[AMI] Error crítico en originate:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Asterisk rechazó el comando o está desconectado",
+      detail: error.message,
+    });
+  }
+});
+
+// ── CSch originate endpoint ────────────────────────────────────────────────
+// Idéntico al de SarahIA pero con CSCH_AUTH_TOKEN y header Auth-Token.
+// NO modifica el endpoint /originate existente.
+
+app.post("/csch/originate", async (req, res) => {
+  try {
+    const token = req.header("Auth-Token") || "";
+    if (token !== CSCH_AUTH_TOKEN) {
+      console.warn("[AMI/CSch] Intento de acceso no autorizado");
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const { user_phone, agent_ext, call_id } = req.body || {};
+
+    if (!user_phone || !agent_ext || !call_id) {
+      return res.status(400).json({
+        error: "Faltan parámetros: user_phone, agent_ext o call_id",
+      });
+    }
+
+    const channelTarget = `Local/${agent_ext}@from-internal-custom`;
+
+    console.log(
+      `[AMI/CSch] Disparando Originate: ${channelTarget} -> ${user_phone} (ID: ${call_id})`
+    );
+
+    const actionData = {
+      Action: "Originate",
+      Channel: channelTarget,
+      Context: AMI_TRANSFER_CONTEXT,
+      Exten: "s",
+      Priority: 1,
+      Async: "true",
+      Variable: `DESTINO_HUMANO=${user_phone},X_CALL_ID=${call_id},X_CALLER_ID=${user_phone}`,
+    };
+
+    const response = await ami.action(actionData);
+
+    console.log("[AMI/CSch] Comando aceptado por Asterisk para ID:", call_id);
+
+    return res.json({
+      status: "success",
+      message: "Llamada lanzada correctamente",
+      asterisk_ref: response.ActionID || "pending",
+    });
+  } catch (error) {
+    console.error("[AMI/CSch] Error crítico en originate:", error);
     return res.status(500).json({
       status: "error",
       message: "Asterisk rechazó el comando o está desconectado",
