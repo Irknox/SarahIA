@@ -130,6 +130,46 @@ app.post("/csch/originate", async (req, res) => {
   }
 });
 
+// ── CSch hangup endpoint ────────────────────────────────────────────────────
+// Corta un channel activo en Asterisk por call_id.
+// Recibe { channel } en el body — el channel es guardado en Redis por el dialplan.
+
+app.post("/csch/hangup", async (req, res) => {
+  try {
+    const token = req.header("Auth-Token") || "";
+    if (token !== CSCH_AUTH_TOKEN) {
+      console.warn("[AMI/CSch] Intento de acceso no autorizado en hangup");
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const { channel } = req.body || {};
+    if (!channel) {
+      return res.status(400).json({ error: "Falta parámetro: channel" });
+    }
+
+    console.log(`[AMI/CSch] Hangup: ${channel}`);
+
+    const response = await ami.action({
+      Action: "Hangup",
+      Channel: channel,
+    });
+
+    console.log("[AMI/CSch] Hangup aceptado para channel:", channel);
+    return res.json({
+      status: "success",
+      message: "Canal cortado",
+      asterisk_ref: response.ActionID || "pending",
+    });
+  } catch (error) {
+    console.error("[AMI/CSch] Error en hangup:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Error al cortar el canal",
+      detail: error.message,
+    });
+  }
+});
+
 const PORT = 8282;
 app.listen(PORT, () => {
   console.log(`[AMI Bridge] Escuchando en puerto ${PORT}`);
